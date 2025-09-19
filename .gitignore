@@ -1,6 +1,5 @@
 # Dados e estado das aplicações
 minio/data/
-nifi/conf/
 nifi/data/
 postgres/data/
 
