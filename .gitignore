@@ -1,7 +1,8 @@
 # Dados e estado das aplicações
-minio/
-nifi/
-postgres/
+minio/data/
+nifi/conf/
+nifi/data/
+postgres/data/
 
 # Logs
 logs/
