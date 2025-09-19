@@ -47,8 +47,8 @@ services:
       - SINGLE_USER_CREDENTIALS_PASSWORD=projetofinal
       - TZ="America/Sao_Paulo"
     volumes:
-      - ./nifi/conf:/opt/nifi/nifi-current/conf
-      - ./nifi/data:/opt/nifi/nifi-current/database_repository
+      - nifi_conf:/opt/nifi/nifi-current/conf
+      - nifi_data:/opt/nifi/nifi-current/database_repository
     depends_on:
       - minio
     ports:
@@ -60,3 +60,8 @@ services:
 networks:
   sptrans-network:
     driver: bridge
+
+
+volumes:
+  nifi_conf:
+  nifi_data:
