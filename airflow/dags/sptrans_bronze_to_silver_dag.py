@@ -9,6 +9,7 @@ with DAG(
     schedule_interval="5 * * * *",
     catchup=False,
     tags=["sptrans", "bronze", "silver", "spark"],
+    doc_md="DAG para processar dados da SPTrans da camada Bronze para a Silver.",
 ) as dag:
     
     app_args = [
@@ -20,7 +21,8 @@ with DAG(
 
     submit_spark_job = SparkSubmitOperator(
         task_id="submit_bronze_to_silver_spark_job",
-        conn_id="spark_default",  # <--- Usa a conexão que definimos via variável de ambiente
+        conn_id=None,
+        master="spark://spark-master:7077",
         application="/opt/bitnami/spark/apps/bronze_to_silver_incremental.py",
         application_args=app_args,
         conf={
