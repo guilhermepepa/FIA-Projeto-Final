@@ -24,12 +24,19 @@ services:
     container_name: minio-setup
     depends_on:
       - minio
+    volumes:
+      - ./sptrans_gtfs-files:/gtfs-data-local
     entrypoint: >
       /bin/sh -c "
-      until (/usr/bin/mc alias set local http://minio:9000 admin projetofinal) do echo '...aguardando MinIO...' && sleep 1; done;
+      echo 'Aguardando o MinIO ficar pronto...';
+      until (/usr/bin/mc alias set local http://minio:9000 admin projetofinal) do echo '...tentando novamente...' && sleep 1; done;
+      echo 'MinIO pronto. Criando buckets...';
       /usr/bin/mc mb local/bronze --ignore-existing;
       /usr/bin/mc mb local/silver --ignore-existing;
-      echo 'Buckets criados com sucesso.';
+      echo 'Buckets criados.';
+      echo 'Copiando arquivos GTFS para a camada bronze...';
+      /usr/bin/mc cp --recursive /gtfs-data-local/ local/bronze/gtfs/;
+      echo 'Cópia dos arquivos GTFS concluída.';
       "
     networks:
       - sptrans-network
