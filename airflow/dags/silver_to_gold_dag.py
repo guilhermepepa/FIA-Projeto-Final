@@ -48,7 +48,7 @@ with DAG(
         postgres_conn_id="postgres_default",
         sql="""
             DELETE FROM dm_onibus_por_linha_hora
-            WHERE timestamp_hora = '{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S') }}';
+            WHERE timestamp_hora = '{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y-%m-%d %H:00:00') }}';
         """,
     )
 
