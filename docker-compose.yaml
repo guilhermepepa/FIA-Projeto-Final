@@ -70,7 +70,7 @@ services:
       - POSTGRES_DB=sptrans_dw
     volumes:
       - ./postgres/data:/var/lib/postgresql/data
-      - ./scripts/postgres/init-scripts:/docker-entrypoint-initdb.d
+      - ./scripts/init-scripts:/docker-entrypoint-initdb.d
     networks:
       - sptrans-network
 
