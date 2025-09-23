@@ -102,10 +102,9 @@ services:
     networks:
       - sptrans-network
 
-
-  airflow-scheduler:
+  airflow-init:
     image: apache/airflow:${AIRFLOW_VERSION:-2.8.1}
-    container_name: airflow-scheduler
+    container_name: airflow-init
     depends_on:
       - postgres
     volumes:
@@ -116,13 +115,40 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:projetofinal@postgres:5432/sptrans_dw
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - _AIRFLOW_DB_UPGRADE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=projetofinal
+    command: >
+      bash -c "
+        airflow db init &&
+        airflow users create --role Admin --username admin --email guilhermepepa@gmail.com --firstname admin --lastname admin --password projetofinal &&
+        airflow connections add 'spark_default' --conn-type 'spark' --conn-host 'spark://spark-master' --conn-port 7077
+      "
+    networks:
+      - sptrans-network
+
+  airflow-scheduler:
+    image: apache/airflow:${AIRFLOW_VERSION:-2.8.1}
+    container_name: airflow-scheduler
+    depends_on:
+      - postgres
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:projetofinal@postgres:5432/sptrans_dw
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
       # Variáveis para o entrypoint da imagem oficial cuidar da inicialização:
       - _AIRFLOW_DB_UPGRADE=true
       - _AIRFLOW_WWW_USER_CREATE=true
       - _AIRFLOW_WWW_USER_USERNAME=admin
       - _AIRFLOW_WWW_USER_PASSWORD=projetofinal
       - _AIRFLOW_CONN_SPARK_DEFAULT=spark://spark-master:7077 
-      - _PIP_ADDITIONAL_REQUIREMENTS=apache-airflow-providers-apache-spark pyspark
+      - _PIP_ADDITIONAL_REQUIREMENTS=apache-airflow-providers-apache-spark pyspark apache-airflow-providers-docker
     command: scheduler
     networks:
       - sptrans-network
@@ -138,6 +164,7 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:projetofinal@postgres:5432/sptrans_dw
@@ -146,7 +173,7 @@ services:
       - _AIRFLOW_WWW_USER_USERNAME=admin
       - _AIRFLOW_WWW_USER_PASSWORD=projetofinal      
       - _AIRFLOW_CONN_SPARK_DEFAULT=spark://spark-master:7077
-      - _PIP_ADDITIONAL_REQUIREMENTS=apache-airflow-providers-apache-spark pyspark
+      - _PIP_ADDITIONAL_REQUIREMENTS=apache-airflow-providers-apache-spark pyspark apache-airflow-providers-docker
     command: webserver
     networks:
       - sptrans-network
@@ -162,7 +189,7 @@ services:
       - postgres
     environment:
       - MB_DB_TYPE=postgres
-      - MB_DB_DBNAME=sptrans_dw # Usando o mesmo banco de dados para a aplicação do Metabase
+      - MB_DB_DBNAME=sptrans_dw
       - MB_DB_PORT=5432
       - MB_DB_USER=admin
       - MB_DB_PASS=projetofinal
@@ -178,3 +205,9 @@ networks:
 volumes:
   nifi_conf:
   nifi_data:
+  spark_apps_volume:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./spark/apps

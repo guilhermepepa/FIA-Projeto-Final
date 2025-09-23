@@ -6,13 +6,13 @@ from pyspark.sql.types import StructType, StructField, StringType, LongType, Boo
 
 def main():
     """
-    Função principal do nosso job Spark incremental.
+    Função principal do nosso job Spark.
     Recebe ano, mes, dia e hora como argumentos para processar uma partição específica.
     """
     # --- Passo 1: Capturar os argumentos da linha de comando ---
     if len(sys.argv) != 5:
         print("Erro: Número incorreto de argumentos.")
-        print("Uso: spark-submit bronze_to_silver_incremental.py <ano> <mes> <dia> <hora>")
+        print("Uso: spark-submit bronze_to_silver.py <ano> <mes> <dia> <hora>")
         sys.exit(1)
     
     ano = sys.argv[1]
