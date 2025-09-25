@@ -1,6 +1,6 @@
 import sys
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, countDistinct, lit, hour
+from pyspark.sql.functions import col, countDistinct, lit, hour, to_date
 from pyspark.sql.types import StructType, StructField, StringType, LongType, TimestampType, IntegerType
 from pyspark.sql.utils import AnalysisException
 
@@ -34,11 +34,24 @@ def main():
     silver_path = f"s3a://silver/posicoes_onibus/ano={ano}/mes={mes}/dia={dia}/"
     gtfs_routes_path = "s3a://bronze/gtfs/routes.txt"
 
-
-    # --- 1. LÓGICA PRINCIPAL: Ler e Transformar os Dados ---
+    print(f"Tentando ler dados da camada Silver de: {silver_path}")
     
-    print(f"Lendo dados de posições da camada Silver de: {silver_path}")
-    df_posicoes = spark.read.format("parquet").load(silver_path)
+    try:
+        df_posicoes = spark.read.format("parquet").load(silver_path)
+        
+        if df_posicoes.count() == 0:
+            print(f"Pasta encontrada em {silver_path}, mas sem dados. Encerrando com sucesso.")
+            spark.stop()
+            sys.exit(0)
+
+    except AnalysisException as e:
+        if "Path does not exist" in str(e):
+            print(f"Caminho {silver_path} não encontrado na camada Silver.")
+            print("Isso é esperado se o job Bronze-para-Silver não processou dados. Encerrando com sucesso.")
+            spark.stop()
+            sys.exit(0)
+        else:
+            raise e
     
     df_posicoes_hora = df_posicoes.filter(hour(col("timestamp_captura")) == int(hora))
 
@@ -69,11 +82,10 @@ def main():
 
     print("Enriquecendo com nomes das linhas...")
     df_gold_new = df_contagem_onibus.join(
-        df_routes, 
-        df_contagem_onibus.letreiro_linha == df_routes.route_id, 
-        "inner"
+        df_routes, df_contagem_onibus.letreiro_linha == df_routes.route_id, "inner"
     ).select(
-        lit(timestamp_processamento).cast(TimestampType()).alias("timestamp_hora"),
+        to_date(lit(f"{ano}-{mes_str}-{dia}")).alias("data_referencia"), # Coluna de DATA
+        lit(hora).alias("hora_referencia"), # Coluna de HORA (inteiro)
         col("codigo_linha"),
         col("letreiro_linha"),
         col("route_long_name").alias("nome_linha"),

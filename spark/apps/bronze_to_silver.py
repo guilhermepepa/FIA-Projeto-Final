@@ -3,6 +3,7 @@ import sys
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, explode, current_timestamp, lit
 from pyspark.sql.types import StructType, StructField, StringType, LongType, BooleanType, DoubleType, TimestampType, ArrayType
+from pyspark.sql.utils import AnalysisException
 
 def main():
     # --- Passo 1: Capturar os argumentos da linha de comando ---
@@ -32,8 +33,7 @@ def main():
     # --- Passo 3: Definir os caminhos de forma dinâmica ---
     bronze_path = f"s3a://bronze/sptrans/posicao/{ano}/{mes}/{dia}/{hora}/"
     silver_path = "s3a://silver/posicoes_onibus/"
-    
-    # A definição do Schema continua a mesma
+
     schema_veiculo = StructType([
         StructField("p", LongType(), True), StructField("a", BooleanType(), True),
         StructField("ta", StringType(), True), StructField("py", DoubleType(), True),
@@ -51,16 +51,28 @@ def main():
         StructField("l", ArrayType(schema_linha), True)
     ])
 
-    print(f"Lendo dados da camada Bronze de: {bronze_path}")
-    df_raw = spark.read.schema(schema_principal).json(bronze_path)
+    print(f"Tentando ler dados da camada Bronze de: {bronze_path}")
+    try:
+        df_raw = spark.read.schema(schema_principal).json(bronze_path)
+        
+        # Checa se o DataFrame está vazio (pasta existe mas sem arquivos válidos)
+        if df_raw.count() == 0:
+            print(f"Pasta encontrada em {bronze_path}, mas sem dados para processar. Encerrando com sucesso.")
+            spark.stop()
+            sys.exit(0) # Sai com código 0 (sucesso)
 
-    print(f"Número de registros lidos da camada Bronze: {df_raw.count()}")
-    if df_raw.count() == 0:
-        print("Nenhum dado encontrado para o período especificado. Encerrando o job.")
-        spark.stop()
-        sys.exit(0)
+    except AnalysisException as e:
+        # Captura o erro específico de "caminho não encontrado"
+        if "Path does not exist" in str(e):
+            print(f"Caminho {bronze_path} não encontrado no MinIO.")
+            print("Isso é esperado se o NiFi estava fora do ar. Encerrando com sucesso.")
+            spark.stop()
+            sys.exit(0) # Sai com código 0 (sucesso)
+        else:
+            # Se for qualquer outro erro, o job deve falhar
+            raise e
 
-    # --- Passo 4: Transformar os dados (mesma lógica de antes) ---
+    # --- Passo 4: Transformar os dados
     df_exploded_linhas = df_raw.withColumn("l", explode(col("l")))
     df_exploded_veiculos = df_exploded_linhas.withColumn("vs", explode(col("l.vs")))
 

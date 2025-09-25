@@ -42,25 +42,51 @@ with DAG(
         ]
     )
 
-    # TAREFA 2: APENAS APAGAR os dados da hora correspondente na tabela final
+    # TAREFA 2: Garantir que a tabela final exista com o schema CORRETO
+    task_create_gold_table = PostgresOperator(
+        task_id="create_gold_table",
+        postgres_conn_id="postgres_default",
+        sql="""
+            CREATE TABLE IF NOT EXISTS dm_onibus_por_linha_hora (
+                data_referencia DATE,
+                hora_referencia INTEGER,
+                codigo_linha BIGINT,
+                letreiro_linha VARCHAR,
+                nome_linha VARCHAR,
+                quantidade_onibus BIGINT
+            );
+        """
+    )
+
+    # TAREFA 3: APAGAR os dados da hora correspondente na tabela final
     task_delete_previous_hour = PostgresOperator(
         task_id="delete_data_for_hour",
         postgres_conn_id="postgres_default",
         sql="""
             DELETE FROM dm_onibus_por_linha_hora
-            WHERE timestamp_hora = '{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y-%m-%d %H:00:00') }}';
+            WHERE data_referencia = '{{ (data_interval_end - macros.timedelta(hours=4)).strftime('%Y-%m-%d') }}'
+              AND hora_referencia = {{ (data_interval_end - macros.timedelta(hours=4)).strftime('%H') | int }};
         """,
     )
 
-    # TAREFA 3: APENAS INSERIR os novos dados da tabela de staging
+    # TAREFA 4: INSERIR os novos dados da tabela de staging
     task_insert_from_staging = PostgresOperator(
         task_id="insert_data_from_staging",
         postgres_conn_id="postgres_default",
         sql="""
-            INSERT INTO dm_onibus_por_linha_hora
-            SELECT * FROM staging_dm_onibus_por_linha_hora;
+            INSERT INTO dm_onibus_por_linha_hora (
+            data_referencia, hora_referencia, codigo_linha, letreiro_linha, nome_linha, quantidade_onibus
+            )
+            SELECT
+            data_referencia,
+            hora_referencia::integer,
+            codigo_linha,
+            letreiro_linha,
+            nome_linha,
+            quantidade_onibus
+            FROM staging_dm_onibus_por_linha_hora;
         """,
     )
 
-    # Define a nova ordem de execução: Spark -> Delete -> Insert
-    task_spark_silver_to_gold >> task_delete_previous_hour >> task_insert_from_staging
+    # Define a nova ordem de execução: Spark -> Create -> Delete -> Insert
+    task_spark_silver_to_gold >> task_create_gold_table >> task_delete_previous_hour >> task_insert_from_staging
