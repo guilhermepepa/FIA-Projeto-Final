@@ -4,12 +4,13 @@ from airflow.models.dag import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from docker.types import Mount
-import os
+
+from datasets import silver_sptrans_posicoes
 
 with DAG(
     dag_id="silver_to_gold",
     start_date=pendulum.datetime(2025, 9, 23, tz="America/Sao_Paulo"),
-    schedule_interval="15 * * * *", # Executa aos 15 minutos de toda hora
+    schedule=[silver_sptrans_posicoes],
     catchup=False,
     tags=["sptrans", "silver", "gold", "spark"],
 ) as dag:
@@ -18,7 +19,7 @@ with DAG(
         "spark-submit "
         "--master spark://spark-master:7077 "
         "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0 "
-        "/opt/bitnami/spark/apps/silver_to_gold.py "
+        "/opt/bitnami/spark/apps/silver_to_gold_qtde_onibus_por_linha_hora.py "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%m') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%d') }} "
@@ -64,8 +65,8 @@ with DAG(
         postgres_conn_id="postgres_default",
         sql="""
             DELETE FROM dm_onibus_por_linha_hora
-            WHERE data_referencia = '{{ (data_interval_end - macros.timedelta(hours=4)).strftime('%Y-%m-%d') }}'
-              AND hora_referencia = {{ (data_interval_end - macros.timedelta(hours=4)).strftime('%H') | int }};
+            WHERE data_referencia = '{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y-%m-%d') }}'
+              AND hora_referencia = {{ (data_interval_end - macros.timedelta(hours=1)).strftime('%H') | int }};
         """,
     )
 

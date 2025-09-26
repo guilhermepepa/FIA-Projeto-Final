@@ -5,6 +5,10 @@ from pyspark.sql.functions import col, explode, current_timestamp, lit
 from pyspark.sql.types import StructType, StructField, StringType, LongType, BooleanType, DoubleType, TimestampType, ArrayType
 from pyspark.sql.utils import AnalysisException
 
+def log_info(message):
+    """Função auxiliar para imprimir logs formatados e fáceis de encontrar."""
+    print(f">>> [SPTRANS_LOG]: {message}")
+
 def main():
     # --- Passo 1: Capturar os argumentos da linha de comando ---
     if len(sys.argv) != 5:
@@ -15,6 +19,11 @@ def main():
     mes = sys.argv[2]
     dia = sys.argv[3]
     hora = sys.argv[4]
+
+    print("\n" + "="*80)
+    log_info(f"INICIANDO JOB BRONZE-PARA-SILVER")
+    log_info(f"Período de processamento: {ano}-{mes}-{dia} {hora}h UTC")
+    print("="*80 + "\n")
 
     # --- Passo 2: Criar a Sessão Spark ---
     spark = SparkSession.builder \
@@ -28,7 +37,7 @@ def main():
         .config("spark.sql.sources.partitionOverwriteMode", "dynamic") \
         .getOrCreate()
 
-    print("Sessão Spark iniciada com sucesso!")
+    log_info("Sessão Spark iniciada com sucesso!")
 
     # --- Passo 3: Definir os caminhos de forma dinâmica ---
     bronze_path = f"s3a://bronze/sptrans/posicao/{ano}/{mes}/{dia}/{hora}/"
@@ -51,21 +60,21 @@ def main():
         StructField("l", ArrayType(schema_linha), True)
     ])
 
-    print(f"Tentando ler dados da camada Bronze de: {bronze_path}")
+    log_info(f"Tentando ler dados da camada Bronze de: {bronze_path}")
     try:
         df_raw = spark.read.schema(schema_principal).json(bronze_path)
         
         # Checa se o DataFrame está vazio (pasta existe mas sem arquivos válidos)
         if df_raw.count() == 0:
-            print(f"Pasta encontrada em {bronze_path}, mas sem dados para processar. Encerrando com sucesso.")
+            log_info(f"Pasta encontrada em {bronze_path}, mas sem dados para processar. Encerrando com sucesso.")
             spark.stop()
             sys.exit(0) # Sai com código 0 (sucesso)
 
     except AnalysisException as e:
         # Captura o erro específico de "caminho não encontrado"
         if "Path does not exist" in str(e):
-            print(f"Caminho {bronze_path} não encontrado no MinIO.")
-            print("Isso é esperado se o NiFi estava fora do ar. Encerrando com sucesso.")
+            log_info(f"Caminho {bronze_path} não encontrado no MinIO.")
+            log_info("Isso é esperado se o NiFi estava fora do ar. Encerrando com sucesso.")
             spark.stop()
             sys.exit(0) # Sai com código 0 (sucesso)
         else:
@@ -94,18 +103,25 @@ def main():
     df_silver = df_silver.withColumn("mes", lit(mes).cast("integer"))
     df_silver = df_silver.withColumn("dia", lit(dia).cast("integer"))
 
-    print("Transformação concluída. Schema final:")
-    df_silver.printSchema()
+    log_info("Transformação concluída.")
+
+    # O .cache() otimiza a performance, pois vamos realizar duas ações (.count e .write) no mesmo DataFrame.
+    df_silver.cache()
+    num_registros_salvos = df_silver.count()
+    log_info(f"Total de {num_registros_salvos} registros de posição de ônibus serão salvos.")
 
     # --- Passo 6: Salvar na Camada Silver com Overwrite Dinâmico ---
-    print(f"Salvando dados transformados na camada Silver em: {silver_path}")
-    df_silver.write \
-        .mode("overwrite") \
-        .format("parquet") \
-        .partitionBy("ano", "mes", "dia") \
-        .save(silver_path)
+    if num_registros_salvos > 0:
+        log_info(f"Salvando dados transformados na camada Silver em: {silver_path}")
+        df_silver.write \
+            .mode("overwrite") \
+            .format("parquet") \
+            .partitionBy("ano", "mes", "dia") \
+            .save(silver_path)
+    else:
+        log_info("Nenhum registro para salvar. Pulando a etapa de escrita.")
 
-    print("Job Bronze to Silver concluído com sucesso!")
+    log_info("Job Bronze to Silver concluído com sucesso!")
     spark.stop()
 
 if __name__ == "__main__":

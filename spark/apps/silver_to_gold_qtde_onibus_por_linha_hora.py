@@ -4,6 +4,10 @@ from pyspark.sql.functions import col, countDistinct, lit, hour, to_date
 from pyspark.sql.types import StructType, StructField, StringType, LongType, TimestampType, IntegerType
 from pyspark.sql.utils import AnalysisException
 
+def log_info(message):
+    """Função auxiliar para imprimir logs formatados e fáceis de encontrar."""
+    print(f">>> [SPTRANS_LOG]: {message}")
+
 def main():
     if len(sys.argv) != 5:
         print("Erro: Uso incorreto. Forneça <ano> <mes> <dia> <hora>")
@@ -12,11 +16,14 @@ def main():
     ano = sys.argv[1]
     mes_str = sys.argv[2]
     dia = sys.argv[3]
-    hora = sys.argv[4]
+    hora_str = sys.argv[4]
     mes = int(mes_str)
+    hora = int(hora_str)
 
-    # Define o timestamp exato para esta janela de processamento
-    timestamp_processamento = f"{ano}-{mes_str}-{dia} {hora}:00:00"
+    print("\n" + "="*80)
+    log_info(f"INICIANDO JOB SILVER-PARA-GOLD")
+    log_info(f"Período de processamento: {ano}-{mes_str}-{dia} {hora_str}h (UTC)")
+    print("="*80 + "\n")
 
     spark = SparkSession.builder \
         .appName(f"SPTrans Silver to Gold - {ano}-{mes_str}-{dia} {hora}h") \
@@ -28,26 +35,26 @@ def main():
         .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0") \
         .getOrCreate()
 
-    print("Sessão Spark iniciada com sucesso!")
+    log_info("Sessão Spark iniciada com sucesso!")
 
     # Definições de caminhos e conexão com o banco de dados
     silver_path = f"s3a://silver/posicoes_onibus/ano={ano}/mes={mes}/dia={dia}/"
     gtfs_routes_path = "s3a://bronze/gtfs/routes.txt"
 
-    print(f"Tentando ler dados da camada Silver de: {silver_path}")
+    log_info(f"Tentando ler dados da camada Silver de: {silver_path}")
     
     try:
         df_posicoes = spark.read.format("parquet").load(silver_path)
         
         if df_posicoes.count() == 0:
-            print(f"Pasta encontrada em {silver_path}, mas sem dados. Encerrando com sucesso.")
+            log_info(f"Pasta encontrada em {silver_path}, mas sem dados. Encerrando com sucesso.")
             spark.stop()
             sys.exit(0)
 
     except AnalysisException as e:
         if "Path does not exist" in str(e):
-            print(f"Caminho {silver_path} não encontrado na camada Silver.")
-            print("Isso é esperado se o job Bronze-para-Silver não processou dados. Encerrando com sucesso.")
+            log_info(f"Caminho {silver_path} não encontrado na camada Silver.")
+            log_info("Isso é esperado se o job Bronze-para-Silver não processou dados. Encerrando com sucesso.")
             spark.stop()
             sys.exit(0)
         else:
@@ -56,7 +63,7 @@ def main():
     df_posicoes_hora = df_posicoes.filter(hour(col("timestamp_captura")) == int(hora))
 
     if df_posicoes_hora.count() == 0:
-        print(f"Nenhum dado encontrado na camada Silver para a hora {hora}. Encerrando o job.")
+        log_info(f"Nenhum dado encontrado na camada Silver para a hora {hora}. Encerrando o job.")
         spark.stop()
         sys.exit(0)
     
@@ -70,17 +77,17 @@ def main():
         StructField("route_text_color", StringType(), True)
     ])
 
-    print(f"Lendo dados de linhas do GTFS de: {gtfs_routes_path}")
+    log_info(f"Lendo dados de linhas do GTFS de: {gtfs_routes_path}")
     df_routes = spark.read.format("csv") \
         .option("header", "true") \
         .schema(schema_routes) \
         .load(gtfs_routes_path)
     
-    print("Agregando dados para contar ônibus por linha...")
+    log_info("Agregando dados para contar ônibus por linha...")
     df_contagem_onibus = df_posicoes_hora.groupBy("codigo_linha", "letreiro_linha") \
         .agg(countDistinct("prefixo_onibus").alias("quantidade_onibus"))
 
-    print("Enriquecendo com nomes das linhas...")
+    log_info("Enriquecendo com nomes das linhas...")
     df_gold_new = df_contagem_onibus.join(
         df_routes, df_contagem_onibus.letreiro_linha == df_routes.route_id, "inner"
     ).select(
@@ -92,14 +99,17 @@ def main():
         col("quantidade_onibus")
     )
     
-    print("Novos dados calculados para a camada Gold:")
+    df_gold_new.cache()
+    num_registros_salvos = df_gold_new.count()
+    log_info("Novos dados calculados para a camada Gold:")
     df_gold_new.show(10, truncate=False)
 
-    if df_gold_new.count() == 0:
-        print("DataFrame final após o join está vazio. Nenhum dado será salvo no PostgreSQL.")
+    if num_registros_salvos == 0:
+        log_info("DataFrame final após o join está vazio. Nenhum dado será salvo no PostgreSQL.")
         spark.stop()
         sys.exit(0)
 
+    log_info(f"Total de {num_registros_salvos} registros agregados serão salvos na tabela de staging.")
 
     db_properties = {
         "user": "admin",
@@ -110,7 +120,7 @@ def main():
 
     staging_table_name = "staging_dm_onibus_por_linha_hora"
 
-    print(f"Salvando dados na tabela de staging '{staging_table_name}'...")
+    log_info(f"Salvando dados na tabela de staging '{staging_table_name}'...")
     df_gold_new.write \
         .mode("overwrite") \
         .format("jdbc") \
@@ -121,7 +131,9 @@ def main():
         .option("driver", db_properties["driver"]) \
         .save()
 
-    print("Job Spark concluído com sucesso!")
+    print("\n" + "="*80)
+    log_info("JOB SILVER-PARA-GOLD CONCLUÍDO COM SUCESSO!")
+    print("="*80 + "\n")
     spark.stop()
 
 if __name__ == "__main__":

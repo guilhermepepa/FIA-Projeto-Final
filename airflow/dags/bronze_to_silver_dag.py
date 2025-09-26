@@ -4,6 +4,8 @@ from airflow.models.dag import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
 
+from datasets import silver_sptrans_posicoes
+
 with DAG(
     dag_id="bronze_to_silver",
     start_date=pendulum.datetime(2025, 9, 23, tz="America/Sao_Paulo"),
@@ -35,5 +37,6 @@ with DAG(
                 target="/opt/bitnami/spark/apps",
                 type="bind"
             )
-        ]
+        ],
+        outlets=[silver_sptrans_posicoes]
     )
