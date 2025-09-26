@@ -7,7 +7,6 @@ from pyspark.sql.utils import AnalysisException
 def log_info(message):
     """Função auxiliar para imprimir logs formatados e fáceis de encontrar."""
     print(f">>> [SPTRANS_LOG]: {message}")
-
 def main():
     if len(sys.argv) != 5:
         print("Erro: Uso incorreto. Forneça <ano> <mes> <dia> <hora>")
