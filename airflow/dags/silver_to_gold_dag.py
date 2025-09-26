@@ -19,7 +19,7 @@ with DAG(
         "spark-submit "
         "--master spark://spark-master:7077 "
         "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0 "
-        "/opt/bitnami/spark/apps/silver_to_gold_qtde_onibus_por_linha_hora.py "
+        "/opt/bitnami/spark/apps/silver_to_gold.py "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%m') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%d') }} "
