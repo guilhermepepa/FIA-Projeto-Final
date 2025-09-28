@@ -13,6 +13,14 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 
 <img width="1366" height="727" alt="image" src="https://github.com/user-attachments/assets/7eaae8f2-233c-4402-a73d-6efe775e1ea8" />
 
+<img width="1887" height="625" alt="image" src="https://github.com/user-attachments/assets/4e503fe1-5f33-46db-b90c-824594e867b7" />
+
+<img width="1838" height="454" alt="image" src="https://github.com/user-attachments/assets/ba949d9c-3cbe-4380-95b5-285527a5e59d" />
+
+<img width="1230" height="611" alt="image" src="https://github.com/user-attachments/assets/084151b4-de69-4d3b-97ac-fe94491a3c76" />
+
+<img width="1839" height="614" alt="image" src="https://github.com/user-attachments/assets/23234839-cc17-473b-b48c-fe7745fe20e1" />
+
 - **Camada Bronze (Dados Brutos)**
 
     * MinIO: Arquivos JSON contendo o retorno completo da API /Posicoes, capturados a cada 2 minutos e particionados por ano/mes/dia/hora. Serve como a fonte da verdade para o pipeline histórico (batch).
