@@ -34,18 +34,22 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 A arquitetura é composta por dois pipelines paralelos que processam os mesmos dados de origem para finalidades diferentes:
 
 **Pipeline de Análise Histórica (Batch)**
-    1. Ingestão (API -> Bronze): A API /Posicoes da SPTrans, que devolve uma lista aninhada de linhas e veículos, é consultada a cada 2 minutos por um processo no NiFi. A resposta JSON completa é salva simultaneamente em dois destinos: na camada Bronze do MinIO para armazenamento histórico, e em um tópico do Apache Kafka para processamento em tempo real.
 
-    2. Transformação (Bronze -> Silver): Um job Spark (bronze_to_silver.py), orquestrado por uma DAG no Airflow para rodar de hora em hora, lê todos os JSONs da hora anterior na camada Bronze. O script "achata" a estrutura aninhada através de operações de explode nas listas de linhas e veículos. As colunas letreiro_linha, codigo_linha, prefixo_onibus, acessivel e timestamp_captura_str são gravadas em arquivos parquet Parquet na camada Silver, gerando uma tabela "flat" otimizada para análises históricas. A camada silver é particionada por ano/mes/dia.
+    1. Ingestão (API -> Bronze): A API /Posicoes da SPTrans, que devolve uma lista aninhada de linhas e veículos, é consultada a cada 2 minutos por um processo no NiFi. A resposta JSON completa é salva simultaneamente em dois destinos: na camada Bronze do MinIO para armazenamento histórico, e em um tópico do Apache Kafka para processamento em tempo real;
+    
+    2. Transformação (Bronze -> Silver): Um job Spark (bronze_to_silver.py), orquestrado por uma DAG no Airflow para rodar de hora em hora, lê todos os JSONs da hora anterior na camada Bronze. O script "achata" a estrutura aninhada através de operações de explode nas listas de linhas e veículos. As colunas letreiro_linha, codigo_linha, prefixo_onibus, acessivel e timestamp_captura_str são gravadas em arquivos parquet Parquet na camada Silver, gerando uma tabela "flat" otimizada para análises históricas. A camada silver é particionada por ano/mes/dia;
+    
+    3. Agregação (Silver -> Gold): Um segundo job Spark (silver_to_gold.py), também orquestrado pelo Airflow para rodar logo após a conclusão do anterior, lê os arquivos Parquet da camada Silver e enriquece-os com os nomes das linhas vindos de um arquivo GTFS (nome da linha). A transformação principal agrupa os dados por linha e conta o número  de ônibus únicos (countDistinct). O DataFrame final é salvo no PostgreSQL através de um processo em duas etapas: o Spark sobrescreve uma tabela temporária, e em seguida uma tarefa SQL no Airflow executa um DELETE e INSERT na tabela final dm_onibus_por_linha_hora, garantindo que o processo seja idempotente e não gere dados duplicados.
 
-    3. Agregação (Silver -> Gold): Um segundo job Spark (silver_to_gold.py), também orquestrado pelo Airflow para rodar logo após a conclusão do anterior, lê os arquivos Parquet da camada Silver e enriquece-os com os nomes das linhas vindos de um arquivo GTFS (nome da linha). A transformação principal agrupa os dados por linha e conta o número de ônibus únicos (countDistinct). O DataFrame final é salvo no PostgreSQL através de um processo em duas etapas: o Spark sobrescreve uma tabela temporária, e em seguida uma tarefa SQL no Airflow executa um DELETE e INSERT na tabela final dm_onibus_por_linha_hora, garantindo que o processo seja idempotente e não gere dados duplicados.
 
-**Pipeline de Mapa em Tempo Real (Streaming)**
+**Pipeline de Mapa em Tempo Quase Real (Streaming)**
+
     1. Processamento Contínuo (Kafka -> Gold): Paralelamente ao fluxo de lote, uma aplicação em PySpark Streaming (kafka_to_gold_posicao_atual_onibus.py) roda de forma contínua. Ela "escuta" o tópico do Kafka que recebe os dados brutos do NiFi. A cada micro-lote de dados, o script realiza as transformações de "flatten" em memória, extraindo as informações de latitude e longitude diretamente do JSON. O resultado é salvo na tabela fato_posicao_onibus_atual no PostgreSQL através de um comando UPSERT (INSERT ... ON CONFLICT), garantindo que a tabela contenha sempre apenas a última localização conhecida de cada veículo, o que é ideal para a visualização no mapa em tempo real.
 
 
 
-Comandos úteis: 
+**Comandos úteis**
+
 nifi: https://127.0.0.1:9443/nifi
 
 minio: http://localhost:9001/
@@ -63,19 +67,15 @@ docker-compose exec airflow-scheduler airflow dags trigger --logical-date 2025-0
 docker-compose exec postgres psql -U admin sptrans_dw
 
 
-Consultas úteis:
-select * from dm_onibus_por_linha_hora order by quantidade_onibus de
-sc limit 100;
+**Consultas úteis**
 
-select count(1) from dm_onibus_por_linha_hora order by quantidade_onibus de
-sc limit 100;
+select * from dm_onibus_por_linha_hora order by quantidade_onibus desc limit 100;
 
-select * from dm_onibus_por_linha_hora
-            WHERE timestamp_hora = '2025-09-25 15:00:00';
+select count(1) from dm_onibus_por_linha_hora order by quantidade_onibus desc limit 100;
 
-select count(1) from staging_dm_onibus_por_linha_hora
-            WHERE timestamp_hora = '2025-09-25 14:00:00';            
+select * from dm_onibus_por_linha_hora WHERE timestamp_hora = '2025-09-25 15:00:00';
 
+select count(1) from staging_dm_onibus_por_linha_hora WHERE timestamp_hora = '2025-09-25 14:00:00';            
 
 SELECT  data_referencia,  hora_referencia,  COUNT(1) AS total_registros FROM  dm_onibus_por_linha_hora GROUP BY  data_referencia,  hora_referencia ORDER BY  data_referencia DESC, hora_referencia DESC;
 
