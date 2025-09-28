@@ -6,41 +6,41 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 
 - **Ingestão:** NiFi
 - **Data Lake:** MinIO
-- **Transformação:** PySpark 
+- **Streaming:** Kafka
+- **Transformação:** PySpark (Batch e Streaming)
 - **Data Warehouse:** PostgreSQL 
 - **Visualização:** Metabase
 
+<img width="1366" height="727" alt="image" src="https://github.com/user-attachments/assets/7eaae8f2-233c-4402-a73d-6efe775e1ea8" />
 
-
-<img width="1165" height="632" alt="image" src="https://github.com/user-attachments/assets/f233835a-2f21-402a-916d-9be741f74fe0" />
-
-
-- Camada Bronze (Dados Brutos):
+- **Camada Bronze (Dados Brutos)**
 
     * MinIO: Arquivos JSON contendo o retorno completo da API /Posicoes, capturados a cada 2 minutos e particionados por ano/mes/dia/hora. Serve como a fonte da verdade para o pipeline histórico (batch).
 
     * Apache Kafka: Um tópico (sptrans_posicoes_raw) que recebe as mesmas mensagens JSON da API em tempo real. Serve como um buffer de alta performance para o pipeline de streaming.
 
-- Camada Silver (Dados Limpos): Arquivos Parquet contendo o histórico detalhado e "achatado" de todas as posições de ônibus, particionados por ano/mes/dia. Utilizada para análises históricas.
+- **Camada Silver (Dados Limpos)**
+  
+    * Arquivos Parquet contendo o histórico detalhado e "achatado" de todas as posições de ônibus, particionados por ano/mes/dia. Utilizada para análises históricas.
 
-- Camada Gold (Dados Agregados e de Servir):
+- **Camada Gold (Dados Agregados e de Servir)**
 
     * Tabela dm_onibus_por_linha_hora: Tabela agregada que armazena a contagem de ônibus por linha a cada hora. Otimizada para relatórios e KPIs históricos no Metabase.
 
     * Tabela fato_posicao_onibus_atual: Tabela de fatos que armazena apenas a última posição conhecida de cada ônibus. Otimizada para visualizações de mapa em tempo real.
 
-Detalhamento dos Pipelines
+**Detalhamento dos Pipelines**
 
 A arquitetura é composta por dois pipelines paralelos que processam os mesmos dados de origem para finalidades diferentes:
 
-Pipeline de Análise Histórica (Batch)
+**Pipeline de Análise Histórica (Batch)**
     1. Ingestão (API -> Bronze): A API /Posicoes da SPTrans, que devolve uma lista aninhada de linhas e veículos, é consultada a cada 2 minutos por um processo no NiFi. A resposta JSON completa é salva simultaneamente em dois destinos: na camada Bronze do MinIO para armazenamento histórico, e em um tópico do Apache Kafka para processamento em tempo real.
 
     2. Transformação (Bronze -> Silver): Um job Spark (bronze_to_silver.py), orquestrado por uma DAG no Airflow para rodar de hora em hora, lê todos os JSONs da hora anterior na camada Bronze. O script "achata" a estrutura aninhada através de operações de explode nas listas de linhas e veículos. As colunas letreiro_linha, codigo_linha, prefixo_onibus, acessivel e timestamp_captura_str são gravadas em arquivos parquet Parquet na camada Silver, gerando uma tabela "flat" otimizada para análises históricas. A camada silver é particionada por ano/mes/dia.
 
     3. Agregação (Silver -> Gold): Um segundo job Spark (silver_to_gold.py), também orquestrado pelo Airflow para rodar logo após a conclusão do anterior, lê os arquivos Parquet da camada Silver e enriquece-os com os nomes das linhas vindos de um arquivo GTFS (nome da linha). A transformação principal agrupa os dados por linha e conta o número de ônibus únicos (countDistinct). O DataFrame final é salvo no PostgreSQL através de um processo em duas etapas: o Spark sobrescreve uma tabela temporária, e em seguida uma tarefa SQL no Airflow executa um DELETE e INSERT na tabela final dm_onibus_por_linha_hora, garantindo que o processo seja idempotente e não gere dados duplicados.
 
-Pipeline de Mapa em Tempo Real (Streaming)
+**Pipeline de Mapa em Tempo Real (Streaming)**
     1. Processamento Contínuo (Kafka -> Gold): Paralelamente ao fluxo de lote, uma aplicação em PySpark Streaming (kafka_to_gold_posicao_atual_onibus.py) roda de forma contínua. Ela "escuta" o tópico do Kafka que recebe os dados brutos do NiFi. A cada micro-lote de dados, o script realiza as transformações de "flatten" em memória, extraindo as informações de latitude e longitude diretamente do JSON. O resultado é salvo na tabela fato_posicao_onibus_atual no PostgreSQL através de um comando UPSERT (INSERT ... ON CONFLICT), garantindo que a tabela contenha sempre apenas a última localização conhecida de cada veículo, o que é ideal para a visualização no mapa em tempo real.
 
 
