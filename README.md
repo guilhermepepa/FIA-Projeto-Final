@@ -15,20 +15,37 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 <img width="1165" height="632" alt="image" src="https://github.com/user-attachments/assets/f233835a-2f21-402a-916d-9be741f74fe0" />
 
 
-- camada bronze -> arquivos JSON contendo o retorno da API /Posicoes, capturados a cada 2 minutos via nifi, particionado por ano / mes / dia / hora;
+- Camada Bronze (Dados Brutos):
 
-- camada silver -> arquivos Parquet contendo o histórico de posições de todos os onibus de todas as linhas, particionado por ano / mes / dia.
+    * MinIO: Arquivos JSON contendo o retorno completo da API /Posicoes, capturados a cada 2 minutos e particionados por ano/mes/dia/hora. Serve como a fonte da verdade para o pipeline histórico (batch).
+
+    * Apache Kafka: Um tópico (sptrans_posicoes_raw) que recebe as mesmas mensagens JSON da API em tempo real. Serve como um buffer de alta performance para o pipeline de streaming.
+
+- Camada Silver (Dados Limpos): Arquivos Parquet contendo o histórico detalhado e "achatado" de todas as posições de ônibus, particionados por ano/mes/dia. Utilizada para análises históricas.
+
+- Camada Gold (Dados Agregados e de Servir):
+
+    * Tabela dm_onibus_por_linha_hora: Tabela agregada que armazena a contagem de ônibus por linha a cada hora. Otimizada para relatórios e KPIs históricos no Metabase.
+
+    * Tabela fato_posicao_onibus_atual: Tabela de fatos que armazena apenas a última posição conhecida de cada ônibus. Otimizada para visualizações de mapa em tempo real.
+
+Detalhamento dos Pipelines
+
+A arquitetura é composta por dois pipelines paralelos que processam os mesmos dados de origem para finalidades diferentes:
+
+Pipeline de Análise Histórica (Batch)
+    1. Ingestão (API -> Bronze): A API /Posicoes da SPTrans, que devolve uma lista aninhada de linhas e veículos, é consultada a cada 2 minutos por um processo no NiFi. A resposta JSON completa é salva simultaneamente em dois destinos: na camada Bronze do MinIO para armazenamento histórico, e em um tópico do Apache Kafka para processamento em tempo real.
+
+    2. Transformação (Bronze -> Silver): Um job Spark (bronze_to_silver.py), orquestrado por uma DAG no Airflow para rodar de hora em hora, lê todos os JSONs da hora anterior na camada Bronze. O script "achata" a estrutura aninhada através de operações de explode nas listas de linhas e veículos. As colunas letreiro_linha, codigo_linha, prefixo_onibus, acessivel e timestamp_captura_str são gravadas em arquivos parquet Parquet na camada Silver, gerando uma tabela "flat" otimizada para análises históricas. A camada silver é particionada por ano/mes/dia.
+
+    3. Agregação (Silver -> Gold): Um segundo job Spark (silver_to_gold.py), também orquestrado pelo Airflow para rodar logo após a conclusão do anterior, lê os arquivos Parquet da camada Silver e enriquece-os com os nomes das linhas vindos de um arquivo GTFS (nome da linha). A transformação principal agrupa os dados por linha e conta o número de ônibus únicos (countDistinct). O DataFrame final é salvo no PostgreSQL através de um processo em duas etapas: o Spark sobrescreve uma tabela temporária, e em seguida uma tarefa SQL no Airflow executa um DELETE e INSERT na tabela final dm_onibus_por_linha_hora, garantindo que o processo seja idempotente e não gere dados duplicados.
+
+Pipeline de Mapa em Tempo Real (Streaming)
+    1. Processamento Contínuo (Kafka -> Gold): Paralelamente ao fluxo de lote, uma aplicação em PySpark Streaming (kafka_to_gold_posicao_atual_onibus.py) roda de forma contínua. Ela "escuta" o tópico do Kafka que recebe os dados brutos do NiFi. A cada micro-lote de dados, o script realiza as transformações de "flatten" em memória, extraindo as informações de latitude e longitude diretamente do JSON. O resultado é salvo na tabela fato_posicao_onibus_atual no PostgreSQL através de um comando UPSERT (INSERT ... ON CONFLICT), garantindo que a tabela contenha sempre apenas a última localização conhecida de cada veículo, o que é ideal para a visualização no mapa em tempo real.
 
 
 
-
-- A api /Posicoes da sptrans devolve uma lista de linhas, sendo que cada lista de linhas possui uma lista de veículos da linha contendo suas posições. Um processor do nifi grava a resposta desta api na camada bronze a cada 2 minutos. A camada bronze está particionada por ano / mes / dia / hora;
-
-- O script bronze_to_silver.py é executado de hora em hora e recebe como entrada os jsons pegando posicões da hora anterior da camada bronze. Ele explode as linhas e os veículos por linha. As colunas letreiro_linha, codigo_linha, prefixo_onibus, acessivel, timestamp_captura_str, latitude e longitude são gravados em um arquivo parquet na camada silver, gerando uma tabela "flat", onde cada linha da tabela corresponde à uma determinada posição a um único ônibus. A camada silver é particionada por ano / mes / dia;
-
-- O script silver_to_gold.py é executado de hora em hora após o processamento do script bronze_to_silver.py, recebendo como entrada os arquivos parquet e também o arquivo routes.txt da camada bronze, para enriquecer os dados com o nome da linha. Ele filtra os registros da camada silver por hora, selecionando apenas os registros da hora que o Airflow mandou processar. Esta transformação tem como objetivo agrupar todas as linhas por letreiro_linha e codigo_linha, sendo que para cada um destes crupos é executado o countDistinct pelo "prefixo_onibus". O resultado é uma tabela resumida com data_referencia, hora_referencia, codigo_linha, letreiro_linha, nome_linha e quantidade_onibus. O DataFrame final é salvo no PostgreSQL através de um processo seguro de duas etapas, orquestrado pelo Airflow: primeiro, o Spark sobrescreve uma tabela temporária chamada staging_dm_onibus_por_linha_hora. Em seguida, uma segunda tarefa no Airflow executa um comando SQL que apaga os dados da hora correspondente na tabela final dm_onibus_por_linha_hora e, então, insere os novos dados da tabela de staging. Este padrão de "delete-and-insert" garante que o pipeline seja idempotente, ou seja, que possa ser re-executado para a mesma hora sem gerar dados duplicados.
-
-
+Comandos úteis: 
 nifi: https://127.0.0.1:9443/nifi
 
 minio: http://localhost:9001/
@@ -37,35 +54,27 @@ airflow: http://localhost:8081/
 
 metabase: http://localhost:3000
 
-
 docker-compose exec spark-master spark-submit --conf "spark.driver.extraJavaOptions=-Divy.home=/tmp" --conf "spark.executor.extraJavaOptions=-Divy.home=/tmp" /opt/bitnami/spark/apps/bronze_to_silver.py 2025 09 26 13
 
 docker-compose exec spark-master spark-submit --packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0 --conf "spark.driver.extraJavaOptions=-Divy.home=/tmp" --conf "spark.executor.extraJavaOptions=-Divy.home=/tmp" /opt/bitnami/spark/apps/silver_to_gold_qtde_onibus_por_linha_hora.py 2025 09 26 13
 
-
 docker-compose exec airflow-scheduler airflow dags trigger --logical-date 2025-09-26T14:05:00Z bronze_to_silver
-
-
 
 docker-compose exec postgres psql -U admin sptrans_dw
 
+
+Consultas úteis:
 select * from dm_onibus_por_linha_hora order by quantidade_onibus de
 sc limit 100;
 
-
 select count(1) from dm_onibus_por_linha_hora order by quantidade_onibus de
 sc limit 100;
-
-
 
 select * from dm_onibus_por_linha_hora
             WHERE timestamp_hora = '2025-09-25 15:00:00';
 
 select count(1) from staging_dm_onibus_por_linha_hora
             WHERE timestamp_hora = '2025-09-25 14:00:00';            
-
-
-
 
 
 SELECT  data_referencia,  hora_referencia,  COUNT(1) AS total_registros FROM  dm_onibus_por_linha_hora GROUP BY  data_referencia,  hora_referencia ORDER BY  data_referencia DESC, hora_referencia DESC;
