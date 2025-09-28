@@ -90,9 +90,7 @@ def main():
         col("l.cl").alias("codigo_linha"),
         col("vs.p").alias("prefixo_onibus"),
         col("vs.a").alias("acessivel"),
-        col("vs.ta").alias("timestamp_captura_str"),
-        col("vs.py").alias("latitude"),
-        col("vs.px").alias("longitude")
+        col("vs.ta").alias("timestamp_captura_str")
     )
     
     # --- Passo 5: Adicionar colunas de partição e controle ---
