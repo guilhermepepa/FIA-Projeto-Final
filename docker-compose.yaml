@@ -204,6 +204,7 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_MESSAGE_MAX_BYTES: 5242880
     networks:
       - sptrans-network
   
@@ -234,6 +235,8 @@ services:
       - spark-master
       - kafka-setup
     command: [ "/opt/bitnami/spark/apps/entrypoint.sh" ]
+    environment:
+      - TZ="America/Sao_Paulo"
     restart: always
     volumes:
       - ./spark/apps:/opt/bitnami/spark/apps
