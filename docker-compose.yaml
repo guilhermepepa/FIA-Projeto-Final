@@ -182,7 +182,7 @@ services:
       - sptrans-network
 
 
-  # --- NOVOS SERVIÇOS KAFKA ABAIXO ---
+  # --- NOVOS SERVIÇOS KAFKA ---
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.3
     container_name: zookeeper

@@ -4,7 +4,7 @@ CREATE DATABASE metabase_meta;
 -- Conecta-se ao nosso Data Warehouse para criar as tabelas
 \c sptrans_dw;
 
--- Cria a tabela para as posições em tempo real
+-- Cria a tabela para as posições
 CREATE TABLE fato_posicao_onibus_atual (
     prefixo_onibus BIGINT PRIMARY KEY,
     letreiro_linha VARCHAR,
