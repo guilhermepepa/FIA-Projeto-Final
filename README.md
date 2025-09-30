@@ -72,10 +72,11 @@ docker-compose exec spark-master spark-submit --packages org.apache.hadoop:hadoo
 
 docker-compose exec airflow-scheduler airflow dags trigger --logical-date 2025-09-26T14:05:00Z bronze_to_silver
 
-docker-compose exec postgres psql -U admin sptrans_dw
 
 
 **Consultas úteis**
+
+docker-compose exec postgres psql -U admin sptrans_dw
 
 select * from dm_onibus_por_linha_hora order by quantidade_onibus desc limit 100;
 
