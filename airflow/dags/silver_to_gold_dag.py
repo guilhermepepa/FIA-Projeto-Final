@@ -19,7 +19,7 @@ with DAG(
         "spark-submit "
         "--master spark://spark-master:7077 "
         "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0 "
-        "/opt/bitnami/spark/apps/silver_to_gold_qtde_onibus_por_linha.py "
+        "/opt/bitnami/spark/apps/silver_to_gold.py "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%m') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%d') }} "
@@ -43,51 +43,43 @@ with DAG(
         ]
     )
 
-    # TAREFA 2: Garantir que a tabela final exista com o schema CORRETO
-    task_create_gold_table = PostgresOperator(
-        task_id="create_gold_table",
+    # TAREFA 2: Garantir que a tabela FATO final exista
+    task_create_fact_table = PostgresOperator(
+        task_id="create_fact_table",
         postgres_conn_id="postgres_default",
         sql="""
-            CREATE TABLE IF NOT EXISTS dm_onibus_por_linha_hora (
-                data_referencia DATE,
-                hora_referencia INTEGER,
-                codigo_linha BIGINT,
-                letreiro_linha VARCHAR,
-                nome_linha VARCHAR,
+            CREATE TABLE IF NOT EXISTS fato_operacao_linhas_hora (
+                id_tempo INTEGER,
+                id_linha BIGINT,
                 quantidade_onibus BIGINT
             );
         """
     )
 
-    # TAREFA 3: APAGAR os dados da hora correspondente na tabela final
-    task_delete_previous_hour = PostgresOperator(
-        task_id="delete_data_for_hour",
+    # TAREFA 3: Apagar os dados da hora correspondente na tabela FATO
+    task_delete_from_fact = PostgresOperator(
+        task_id="delete_from_fact_table",
         postgres_conn_id="postgres_default",
         sql="""
-            DELETE FROM dm_onibus_por_linha_hora
-            WHERE data_referencia = '{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y-%m-%d') }}'
-              AND hora_referencia = {{ (data_interval_end - macros.timedelta(hours=1)).strftime('%H') | int }};
+            DELETE FROM fato_operacao_linhas_hora
+            WHERE id_tempo IN (
+                SELECT id_tempo FROM dim_tempo
+                WHERE data_referencia = '{{ data_interval_end.strftime('%Y-%m-%d') }}'
+                  AND hora_referencia = {{ data_interval_end.strftime('%H') | int }}
+            );
         """,
     )
 
-    # TAREFA 4: INSERIR os novos dados da tabela de staging
-    task_insert_from_staging = PostgresOperator(
-        task_id="insert_data_from_staging",
+    # TAREFA 4: Inserir os novos dados da tabela de staging na FATO
+    task_insert_into_fact = PostgresOperator(
+        task_id="insert_into_fact_table",
         postgres_conn_id="postgres_default",
         sql="""
-            INSERT INTO dm_onibus_por_linha_hora (
-            data_referencia, hora_referencia, codigo_linha, letreiro_linha, nome_linha, quantidade_onibus
-            )
-            SELECT
-            data_referencia,
-            hora_referencia::integer,
-            codigo_linha,
-            letreiro_linha,
-            nome_linha,
-            quantidade_onibus
-            FROM staging_dm_onibus_por_linha_hora;
+            INSERT INTO fato_operacao_linhas_hora (id_tempo, id_linha, quantidade_onibus)
+            SELECT id_tempo, id_linha, quantidade_onibus
+            FROM staging_fato_operacao_linhas_hora;
         """,
     )
 
     # Define a nova ordem de execução: Spark -> Create -> Delete -> Insert
-    task_spark_silver_to_gold >> task_create_gold_table >> task_delete_previous_hour >> task_insert_from_staging
+    task_spark_silver_to_gold >> task_create_fact_table >> task_delete_from_fact >> task_insert_into_fact

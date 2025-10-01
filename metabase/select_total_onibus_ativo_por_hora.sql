@@ -1,16 +1,32 @@
 WITH latest_day AS (
-  SELECT MAX(data_referencia) as dia_recente
-  FROM dm_onibus_por_linha_hora
+  -- Primeiro, descobre qual é a data mais recente que possui dados na tabela de fatos
+  SELECT
+    MAX(dt.data_referencia) as dia_recente
+  FROM
+    fato_operacao_linhas_hora f
+    JOIN dim_tempo dt ON f.id_tempo = dt.id_tempo
 )
+-- Agora, para essa data, soma a quantidade de ônibus de todas as linhas para cada hora
 SELECT
-
-  EXTRACT(hour FROM (data_referencia + hora_referencia * interval '1 hour') AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') AS "Hora (São Paulo)",
-  
-  SUM(quantidade_onibus) AS "Total de Ônibus Ativos"
+  -- A conversão de fuso horário continua a mesma para exibir a hora local
+  EXTRACT(
+    hour
+    FROM
+      (
+        dt.data_referencia + dt.hora_referencia * interval '1 hour'
+      ) AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'
+  ) AS "Hora (São Paulo)",
+  SUM(f.quantidade_onibus) AS "Total de Ônibus Ativos"
 FROM
-  dm_onibus_por_linha_hora
+  fato_operacao_linhas_hora f
+  JOIN dim_tempo dt ON f.id_tempo = dt.id_tempo
 WHERE
-  data_referencia = (SELECT dia_recente FROM latest_day)
+  dt.data_referencia = (
+    SELECT
+      dia_recente
+    FROM
+      latest_day
+  )
 GROUP BY
   "Hora (São Paulo)"
 ORDER BY

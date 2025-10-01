@@ -1,10 +1,22 @@
-WITH latest_hour AS (
-  -- Encontra a data e hora mais recentes
-  SELECT MAX(data_referencia) AS max_data, MAX(hora_referencia) AS max_hora
-  FROM dm_onibus_por_linha_hora
-  WHERE data_referencia = (SELECT MAX(data_referencia) FROM dm_onibus_por_linha_hora)
+-- Usamos uma CTE para encontrar a data e hora mais recentes na nossa tabela de factos
+WITH latest_time AS (
+  SELECT
+    dt.data_referencia,
+    dt.hora_referencia
+  FROM
+    fato_operacao_linhas_hora f
+    JOIN dim_tempo dt ON f.id_tempo = dt.id_tempo
+  ORDER BY
+    dt.data_referencia DESC,
+    dt.hora_referencia DESC
+  LIMIT 1
 )
--- Soma a quantidade de ônibus apenas para essa hora
-SELECT SUM(t.quantidade_onibus) AS "Total de Ônibus em Operação"
-FROM dm_onibus_por_linha_hora AS t, latest_hour AS l
-WHERE t.data_referencia = l.max_data AND t.hora_referencia = l.max_hora;
+-- Agora, somamos a quantidade de autocarros para esse período de tempo
+SELECT
+  SUM(f.quantidade_onibus) AS "Total de Onibus Alocados (Última Hora)"
+FROM
+  fato_operacao_linhas_hora f
+  JOIN dim_tempo dt ON f.id_tempo = dt.id_tempo
+WHERE
+  dt.data_referencia = (SELECT data_referencia FROM latest_time)
+  AND dt.hora_referencia = (SELECT hora_referencia FROM latest_time);

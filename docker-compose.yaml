@@ -227,14 +227,14 @@ services:
     networks:
       - sptrans-network
   
-  # --- NOVO SERVIÇO DE PROCESSAMENTO STREAMING ---
-  spark-streaming-processor:
+  # --- NOVOS SERVIÇOS DE PROCESSAMENTO STREAMING ---
+  spark-streaming-processor-buses-current-position:
     image: bitnami/spark:3.5
-    container_name: spark-streaming-processor
+    container_name: spark-streaming-processor-buses-current-position
     depends_on:
       - spark-master
       - kafka-setup
-    command: [ "/opt/bitnami/spark/apps/entrypoint.sh" ]
+    command: [ "/opt/bitnami/spark/apps/entrypoint_streaming_buses_current_position.sh" ]
     environment:
       - TZ="America/Sao_Paulo"
     restart: always
@@ -242,6 +242,21 @@ services:
       - ./spark/apps:/opt/bitnami/spark/apps
     networks:
       - sptrans-network
+
+  spark-streaming-processor-buses-average-speed:
+    image: bitnami/spark:3.5
+    container_name: spark-streaming-processor-buses-average-speed
+    depends_on:
+      - spark-master
+      - kafka-setup
+    command: [ "/opt/bitnami/spark/apps/entrypoint_streaming_buses_average_speed.sh" ]
+    environment:
+      - TZ="America/Sao_Paulo"
+    restart: always
+    volumes:
+      - ./spark/apps:/opt/bitnami/spark/apps
+    networks:
+      - sptrans-network      
 
   metabase:
     image: metabase/metabase:latest
