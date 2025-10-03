@@ -34,8 +34,8 @@ O projeto utiliza arquitetura medalhão, com três camadas de dados:
 
 - **Camada Gold (Dados Agregados e de Servir)**
    - Banco de dados no Postgres com tabelas agregadas para facilitar a geração de dashboards:
-     
-     <img width="723" height="544" alt="image" src="https://github.com/user-attachments/assets/ed9c56b1-82a2-43aa-be41-8abe055ec755" />
+  
+     <img width="691" height="519" alt="image" src="https://github.com/user-attachments/assets/ef9b22c5-49b1-4a59-981d-a16a55aa755a" />
 
       * Tabelas de Dimensão: **dim_linha** (descreve as linhas de ônibus) e **dim_tempo** (descreve cada hora de cada dia).
       * Tabelas Fato:
