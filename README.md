@@ -10,7 +10,7 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 - **Ingestão:** NiFi (https://127.0.0.1:9443/nifi)
 - **Data Lake:** MinIO (http://localhost:9001/)
 - **Streaming:** Kafka
-- **Orquestração** Airflow (http://localhost:8081/)
+- **Orquestração:** Airflow (http://localhost:8081/)
 - **Transformação:** PySpark (Batch e Streaming)
 - **Data Warehouse:** PostgreSQL 
 - **Visualização:** Metabase (http://localhost:3000)
