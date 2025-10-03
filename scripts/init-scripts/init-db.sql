@@ -1,7 +1,6 @@
 CREATE DATABASE airflow_meta;
 CREATE DATABASE metabase_meta;
 
--- Conecta-se ao nosso Data Warehouse para criar as tabelas
 \c sptrans_dw;
 
 CREATE TABLE fato_posicao_onibus_atual (
@@ -13,14 +12,22 @@ CREATE TABLE fato_posicao_onibus_atual (
     timestamp_captura TIMESTAMP
 );
 
+-- Cria a nova tabela de velocidade com as chaves de dimensão
 CREATE TABLE fato_velocidade_linha (
-    letreiro_linha VARCHAR PRIMARY KEY,
-    velocidade_media_kph DOUBLE PRECISION
+    id_tempo INTEGER,
+    id_linha BIGINT,
+    velocidade_media_kph DOUBLE PRECISION,
+    updated_at TIMESTAMP,
+    PRIMARY KEY (id_tempo, id_linha)
 );
 
+-- Cria a nova tabela de autocarros parados com as chaves de dimensão
 CREATE TABLE fato_onibus_parados_linha (
-    letreiro_linha VARCHAR PRIMARY KEY,
-    quantidade_onibus_parados BIGINT
+    id_tempo INTEGER,
+    id_linha BIGINT,
+    quantidade_onibus_parados BIGINT,
+    updated_at TIMESTAMP,
+    PRIMARY KEY (id_tempo, id_linha)
 );
 
 CREATE TABLE dim_tempo (

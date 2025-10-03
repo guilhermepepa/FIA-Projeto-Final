@@ -1,7 +1,7 @@
 import sys
-from pyspark.sql import SparkSession, Window
-from pyspark.sql.functions import col, from_json, explode, unix_timestamp, when, avg, count, expr
-from pyspark.sql.types import StructType, StructField, StringType, LongType, BooleanType, DoubleType, ArrayType, TimestampType
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, from_json, explode, lag, unix_timestamp, when, avg, count, expr, to_date, lit, current_timestamp, date_format, hour
+from pyspark.sql.types import StructType, StructField, StringType, LongType, BooleanType, DoubleType, ArrayType, TimestampType, IntegerType
 from math import radians, sin, cos, sqrt, atan2
 import psycopg2
 
@@ -9,6 +9,7 @@ def log_info(message):
     print(f">>> [SPTRANS_SPEED_STREAM_LOG]: {message}")
 
 def haversine(lon1, lat1, lon2, lat2):
+    """Calcula a distância em metros entre duas coordenadas geográficas."""
     if None in [lon1, lat1, lon2, lat2]: return 0.0
     R = 6371000
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
@@ -27,6 +28,10 @@ def process_and_upsert(df_new_positions, epoch_id):
     db_properties = {"user": "admin", "password": "projetofinal", "driver": "org.postgresql.Driver"}
     db_url = "jdbc:postgresql://postgres:5432/sptrans_dw"
 
+    log_info("Lendo tabelas de dimensão do PostgreSQL.")
+    df_dim_linha = spark.read.jdbc(url=db_url, table="dim_linha", properties=db_properties)
+    df_dim_tempo = spark.read.jdbc(url=db_url, table="dim_tempo", properties=db_properties)
+
     # 1. Lê a última posição conhecida de cada onibus (nossa "memória")
     try:
         df_last_positions = spark.read.jdbc(url=db_url, table="fato_posicao_onibus_atual", properties=db_properties)
@@ -37,45 +42,75 @@ def process_and_upsert(df_new_positions, epoch_id):
     df_with_history = df_new_positions.join(
         df_last_positions.select(
             col("prefixo_onibus"),
-            col("latitude").alias("prev_lat"),
-            col("longitude").alias("prev_lon"),
+            col("latitude").alias("prev_lat"), col("longitude").alias("prev_lon"),
             col("timestamp_captura").alias("prev_ts")
         ), "prefixo_onibus", "inner"
     )
 
     # 3. Calcula a velocidade apenas para movimentos válidos (timestamp novo > timestamp antigo)
+    # Remove resultados discrepantes por problemas na localização
     df_calculations = df_with_history.filter(col("timestamp_captura") > col("prev_ts")) \
         .withColumn("distancia_m", expr("haversine(longitude, latitude, prev_lon, prev_lat)")) \
         .withColumn("tempo_s", unix_timestamp(col("timestamp_captura")) - unix_timestamp(col("prev_ts"))) \
+        .filter(col("tempo_s").isNotNull() & (col("tempo_s") > 10) & (col("tempo_s") < 240)) \
         .withColumn("velocidade_kph", (col("distancia_m") / col("tempo_s")) * 3.6) \
-        .withColumn("esta_parado", when((col("distancia_m") < 50) & (col("tempo_s") > 300), 1).otherwise(0)) \
-        .filter(col("tempo_s").isNotNull() & (col("tempo_s") > 0))
+        .filter(col("velocidade_kph") < 80) \
+        .withColumn("esta_parado", when((col("distancia_m") < 50) & (col("tempo_s") > 180), 1).otherwise(0))
     
-    log_info(f"Calculando KPIs para {df_calculations.count()} eventos de movimento.")
     df_calculations.cache()
+    log_info(f"Calculando KPIs para {df_calculations.count()} eventos de movimento.")
 
     if df_calculations.isEmpty():
         log_info("Nenhum evento de movimento válido neste lote. Pulando."); df_calculations.unpersist(); df_new_positions.unpersist(); return
 
-    df_speed_agg = df_calculations.groupBy("letreiro_linha").agg(avg("velocidade_kph").alias("velocidade_media_kph"))
+    # Filtra para considerar apenas eventos onde o ônibus estava de fato em movimento
+    df_moving_events = df_calculations.filter(col("velocidade_kph") > 5)
+
+    df_speed_agg = df_moving_events.groupBy("letreiro_linha").agg(avg("velocidade_kph").alias("velocidade_media_kph"))
     df_stopped_agg = df_calculations.filter(col("esta_parado") == 1).groupBy("letreiro_linha").agg(count("*").alias("quantidade_onibus_parados"))
 
-    df_speed_agg.write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "staging_velocidade_media_linha").options(**db_properties).save()
-    df_stopped_agg.write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "staging_onibus_parados_linha").options(**db_properties).save()
-    
+    # Junta com dim_linha para obter id_linha
+    df_speed_with_id = df_speed_agg.join(df_dim_linha, "letreiro_linha", "inner").select("id_linha", "velocidade_media_kph")
+    df_stopped_with_id = df_stopped_agg.join(df_dim_linha, "letreiro_linha", "inner").select("id_linha", "quantidade_onibus_parados")
+
+    # Encontra o id_tempo correspondente à hora atual do processamento
+    now_df = spark.createDataFrame([ (1,) ]).withColumn("now", current_timestamp())
+    current_date = now_df.select(to_date("now")).first()[0]
+    current_hour = now_df.select(hour("now")).first()[0]
+
+    id_tempo_df = df_dim_tempo.filter((col("data_referencia") == lit(current_date)) & (col("hora_referencia") == lit(current_hour))).select("id_tempo")
+    id_tempo = id_tempo_df.first().id_tempo if id_tempo_df.count() > 0 else None
+
+    if id_tempo is None:
+        log_info("Não foi possível encontrar o id_tempo correspondente. Pulando o lote."); df_calculations.unpersist(); df_new_positions.unpersist(); return
+
+    # Adiciona a chave de tempo e o timestamp de atualização aos resultados
+    now_ts = current_timestamp()
+    df_speed_final = df_speed_with_id.withColumn("id_tempo", lit(id_tempo)).withColumn("updated_at", now_ts)
+    df_stopped_final = df_stopped_with_id.withColumn("id_tempo", lit(id_tempo)).withColumn("updated_at", now_ts)
+
+    df_speed_final.write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "staging_velocidade_media_linha").options(**db_properties).save()
+    df_stopped_final.write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "staging_onibus_parados_linha").options(**db_properties).save()
+
     conn = None
     try:
         conn = psycopg2.connect(host="postgres", dbname="sptrans_dw", user="admin", password="projetofinal")
         cur = conn.cursor()
+        # MERGE para velocidade usando a chave composta
         cur.execute("""
-            INSERT INTO fato_velocidade_linha (letreiro_linha, velocidade_media_kph)
-            SELECT letreiro_linha, velocidade_media_kph FROM staging_velocidade_media_linha
-            ON CONFLICT (letreiro_linha) DO UPDATE SET velocidade_media_kph = EXCLUDED.velocidade_media_kph;
+            INSERT INTO fato_velocidade_linha (id_tempo, id_linha, velocidade_media_kph, updated_at)
+            SELECT id_tempo, id_linha, velocidade_media_kph, updated_at FROM staging_velocidade_media_linha
+            ON CONFLICT (id_tempo, id_linha) DO UPDATE SET 
+                velocidade_media_kph = EXCLUDED.velocidade_media_kph,
+                updated_at = EXCLUDED.updated_at;
         """)
+        # MERGE para ônibus parados usando a chave composta
         cur.execute("""
-            INSERT INTO fato_onibus_parados_linha (letreiro_linha, quantidade_onibus_parados)
-            SELECT letreiro_linha, quantidade_onibus_parados FROM staging_onibus_parados_linha
-            ON CONFLICT (letreiro_linha) DO UPDATE SET quantidade_onibus_parados = EXCLUDED.quantidade_onibus_parados;
+            INSERT INTO fato_onibus_parados_linha (id_tempo, id_linha, quantidade_onibus_parados, updated_at)
+            SELECT id_tempo, id_linha, quantidade_onibus_parados, updated_at FROM staging_onibus_parados_linha
+            ON CONFLICT (id_tempo, id_linha) DO UPDATE SET 
+                quantidade_onibus_parados = EXCLUDED.quantidade_onibus_parados,
+                updated_at = EXCLUDED.updated_at;
         """)
         conn.commit()
         cur.close()
@@ -97,7 +132,6 @@ def main():
     spark.udf.register("haversine", haversine, DoubleType())
     log_info("Processador de streaming de KPIs iniciado.")
 
-    # --- LÓGICA DE STREAMING QUE ESTAVA EM FALTA ---
     # Schema completo e preenchido
     schema_veiculo = StructType([
         StructField("p", LongType(), True), StructField("a", BooleanType(), True),
