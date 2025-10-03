@@ -28,11 +28,17 @@ with DAG(
         command=spark_command,
         network_mode="fia-projeto-final_sptrans-network",
         auto_remove=True,
+        user='root',
         mounts=[
             Mount(
                 source="/c/Users/guilherme/Desktop/FIA/Docker/FIA-Projeto-Final/spark/apps",
                 target="/opt/bitnami/spark/apps",
                 type="bind",
+            ),
+            Mount(
+                source="fia-projeto-final_spark_ivy_cache", # Nome do projeto + nome do volume
+                target="/root/.ivy2",         # Pasta de cache do Ivy dentro do container
+                type="volume"
             )
         ]
     )

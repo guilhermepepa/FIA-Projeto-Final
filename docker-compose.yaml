@@ -284,6 +284,7 @@ networks:
 volumes:
   nifi_conf:
   nifi_data:
+  spark_ivy_cache:
   spark_apps_volume:
     driver: local
     driver_opts:
