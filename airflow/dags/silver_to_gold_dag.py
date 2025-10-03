@@ -69,8 +69,8 @@ with DAG(
             DELETE FROM fato_operacao_linhas_hora
             WHERE id_tempo IN (
                 SELECT id_tempo FROM dim_tempo
-                WHERE data_referencia = '{{ data_interval_end.strftime('%Y-%m-%d') }}'
-                  AND hora_referencia = {{ data_interval_end.strftime('%H') | int }}
+                WHERE data_referencia = '{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y-%m-%d') }}'
+                  AND hora_referencia = {{ (data_interval_end - macros.timedelta(hours=1)).strftime('%H') | int }}
             );
         """,
     )
