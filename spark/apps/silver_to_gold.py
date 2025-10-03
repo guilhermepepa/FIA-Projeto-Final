@@ -71,7 +71,7 @@ def main():
         log_info(f"Nenhum dado na camada Silver para a hora {hora}. Encerrando."); spark.stop(); sys.exit(0)
     
     log_info("Agregando dados para contar ônibus por linha...")
-    df_contagem_onibus = df_posicoes_hora.groupBy("codigo_linha", "letreiro_linha") \
+    df_contagem_onibus = df_posicoes_hora.groupBy("letreiro_linha") \
         .agg(countDistinct("prefixo_onibus").alias("quantidade_onibus"))
 
     # --- 3. JUNÇÃO COM AS DIMENSÕES PARA OBTER AS CHAVES ESTRANGEIRAS ---

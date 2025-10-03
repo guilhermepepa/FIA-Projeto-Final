@@ -56,7 +56,8 @@ with DAG(
             CREATE TABLE IF NOT EXISTS fato_operacao_linhas_hora (
                 id_tempo INTEGER,
                 id_linha BIGINT,
-                quantidade_onibus BIGINT
+                quantidade_onibus BIGINT,
+                PRIMARY KEY (id_tempo, id_linha)
             );
         """
     )
