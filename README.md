@@ -68,7 +68,7 @@ A arquitetura é composta por dois pipelines que processam os mesmos dados de or
 
 ## Dashboards
 
-<img width="1835" height="531" alt="image" src="https://github.com/user-attachments/assets/b87ba0c8-f559-4b0b-a888-2dbf40222940" />
+<img width="1826" height="531" alt="image" src="https://github.com/user-attachments/assets/675b97e1-7551-4261-82e3-aeeb34f11f7f" />
 
 <img width="1828" height="452" alt="image" src="https://github.com/user-attachments/assets/5d2abd2f-d9c2-4537-aeb9-98be658f30b8" />
 
