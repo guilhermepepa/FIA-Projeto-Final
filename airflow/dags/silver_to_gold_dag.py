@@ -25,8 +25,17 @@ with DAG(
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%d') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%H') }}"
     )
+    
+    # TAREFA 1: Limpa tabela de staging
+    task_clear_staging_table = PostgresOperator(
+        task_id="clear_staging_fact_table",
+        postgres_conn_id="postgres_default",
+        sql="""
+            TRUNCATE TABLE staging_fato_operacao_linhas_hora;
+        """,
+    )
 
-    # TAREFA 1: Rodar o Spark para popular a tabela de staging
+    # TAREFA 2: Rodar o Spark para popular a tabela de staging
     task_spark_silver_to_gold  = DockerOperator(
         task_id="submit_silver_to_gold_spark_job",
         image="bitnami/spark:3.5",
@@ -48,7 +57,7 @@ with DAG(
         ]
     )
 
-    # TAREFA 2: Garantir que a tabela FATO final exista
+    # TAREFA 3: Garantir que a tabela FATO final exista
     task_create_fact_table = PostgresOperator(
         task_id="create_fact_table",
         postgres_conn_id="postgres_default",
@@ -62,7 +71,7 @@ with DAG(
         """
     )
 
-    # TAREFA 3: Apagar os dados da hora correspondente na tabela FATO
+    # TAREFA 4: Apagar os dados da hora correspondente na tabela FATO
     task_delete_from_fact = PostgresOperator(
         task_id="delete_from_fact_table",
         postgres_conn_id="postgres_default",
@@ -76,7 +85,7 @@ with DAG(
         """,
     )
 
-    # TAREFA 4: Inserir os novos dados da tabela de staging na FATO
+    # TAREFA 5: Inserir os novos dados da tabela de staging na FATO
     task_insert_into_fact = PostgresOperator(
         task_id="insert_into_fact_table",
         postgres_conn_id="postgres_default",
@@ -88,4 +97,4 @@ with DAG(
     )
 
     # Define a nova ordem de execução: Spark -> Create -> Delete -> Insert
-    task_spark_silver_to_gold >> task_create_fact_table >> task_delete_from_fact >> task_insert_into_fact
+    task_clear_staging_table >> task_spark_silver_to_gold >> task_create_fact_table >> task_delete_from_fact >> task_insert_into_fact

@@ -9,13 +9,10 @@ WITH latest_day AS (
 -- Agora, para essa data, soma a quantidade de ônibus de todas as linhas para cada hora
 SELECT
   -- A conversão de fuso horário continua a mesma para exibir a hora local
-  EXTRACT(
-    hour
-    FROM
-      (
-        dt.data_referencia + dt.hora_referencia * interval '1 hour'
-      ) AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'
-  ) AS "Hora (São Paulo)",
+  to_char(
+    (dt.data_referencia + dt.hora_referencia * interval '1 hour') AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo',
+    'DD/MM - HH24h'
+  ) AS "Dia e Hora",
   SUM(f.quantidade_onibus) AS "Total de Ônibus Ativos"
 FROM
   fato_operacao_linhas_hora f
@@ -28,7 +25,7 @@ WHERE
       latest_day
   )
 GROUP BY
-  "Hora (São Paulo)"
+  "Dia e Hora"
 ORDER BY
-  "Hora (São Paulo)" ASC
+  "Dia e Hora" ASC
 LIMIT 12;

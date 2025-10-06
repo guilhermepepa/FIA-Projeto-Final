@@ -1,6 +1,6 @@
 import sys
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, from_json, explode, lag, unix_timestamp, when, avg, count, expr, to_date, lit, current_timestamp, date_format, hour
+from pyspark.sql.functions import col, from_json, explode, lag, unix_timestamp, when, avg, count, expr, to_date, lit, current_timestamp, date_format, hour, percentile_approx
 from pyspark.sql.types import StructType, StructField, StringType, LongType, BooleanType, DoubleType, ArrayType, TimestampType, IntegerType
 from math import radians, sin, cos, sqrt, atan2
 import psycopg2
@@ -55,7 +55,7 @@ def process_and_upsert(df_new_positions, epoch_id):
         .filter(col("tempo_s").isNotNull() & (col("tempo_s") > 10) & (col("tempo_s") < 240)) \
         .withColumn("velocidade_kph", (col("distancia_m") / col("tempo_s")) * 3.6) \
         .filter(col("velocidade_kph") < 80) \
-        .withColumn("esta_parado", when((col("distancia_m") < 50) & (col("tempo_s") > 180), 1).otherwise(0))
+        .withColumn("esta_parado", when((col("distancia_m") < 50) & (col("tempo_s") > 300), 1).otherwise(0))
     
     df_calculations.cache()
     log_info(f"Calculando KPIs para {df_calculations.count()} eventos de movimento.")
@@ -63,10 +63,11 @@ def process_and_upsert(df_new_positions, epoch_id):
     if df_calculations.isEmpty():
         log_info("Nenhum evento de movimento válido neste lote. Pulando."); df_calculations.unpersist(); df_new_positions.unpersist(); return
 
-    # Filtra para considerar apenas eventos onde o ônibus estava de fato em movimento
-    df_moving_events = df_calculations.filter(col("velocidade_kph") > 5)
+    # Usando percentile_approx em vez de avg ---
+    df_speed_agg = df_calculations.filter(col("velocidade_kph") > 5) \
+        .groupBy("letreiro_linha") \
+        .agg(percentile_approx("velocidade_kph", 0.85).alias("velocidade_operacional_kph"))
 
-    df_speed_agg = df_moving_events.groupBy("letreiro_linha").agg(avg("velocidade_kph").alias("velocidade_media_kph"))
     df_stopped_agg = df_calculations.filter(col("esta_parado") == 1).groupBy("letreiro_linha").agg(count("*").alias("quantidade_onibus_parados"))
 
     # Junta com dim_linha para obter id_linha
