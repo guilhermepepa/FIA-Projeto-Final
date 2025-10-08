@@ -66,7 +66,7 @@ def process_and_upsert(df_new_positions, epoch_id):
     # Usando percentile_approx em vez de avg ---
     df_speed_agg = df_calculations.filter(col("velocidade_kph") > 5) \
         .groupBy("letreiro_linha") \
-        .agg(percentile_approx("velocidade_kph", 0.85).alias("velocidade_operacional_kph"))
+        .agg(percentile_approx("velocidade_kph", 0.85).alias("velocidade_media_kph"))
 
     df_stopped_agg = df_calculations.filter(col("esta_parado") == 1).groupBy("letreiro_linha").agg(count("*").alias("quantidade_onibus_parados"))
 
@@ -90,7 +90,7 @@ def process_and_upsert(df_new_positions, epoch_id):
     df_speed_final = df_speed_with_id.withColumn("id_tempo", lit(id_tempo)).withColumn("updated_at", now_ts)
     df_stopped_final = df_stopped_with_id.withColumn("id_tempo", lit(id_tempo)).withColumn("updated_at", now_ts)
 
-    df_speed_final.write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "staging_velocidade_media_linha").options(**db_properties).save()
+    df_speed_final.write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "staging_velocidade_linha").options(**db_properties).save()
     df_stopped_final.write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "staging_onibus_parados_linha").options(**db_properties).save()
 
     conn = None
@@ -100,7 +100,7 @@ def process_and_upsert(df_new_positions, epoch_id):
         # MERGE para velocidade usando a chave composta
         cur.execute("""
             INSERT INTO fato_velocidade_linha (id_tempo, id_linha, velocidade_media_kph, updated_at)
-            SELECT id_tempo, id_linha, velocidade_media_kph, updated_at FROM staging_velocidade_media_linha
+            SELECT id_tempo, id_linha, velocidade_media_kph, updated_at FROM staging_velocidade_linha
             ON CONFLICT (id_tempo, id_linha) DO UPDATE SET 
                 velocidade_media_kph = EXCLUDED.velocidade_media_kph,
                 updated_at = EXCLUDED.updated_at;
