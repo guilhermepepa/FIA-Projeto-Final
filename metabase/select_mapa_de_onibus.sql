@@ -17,7 +17,7 @@ WITH top_10_linhas AS (
   FROM
     fato_posicao_onibus_atual
   WHERE
-    timestamp_captura >= NOW() AT TIME ZONE 'UTC' - INTERVAL '5 minutes'
+    timestamp_captura >= NOW() AT TIME ZONE 'UTC' - INTERVAL '10 minutes'
   GROUP BY
     letreiro_linha
   ORDER BY
@@ -34,5 +34,5 @@ SELECT
 FROM
   fato_posicao_onibus_atual AS fpoa
 WHERE
-  fpoa.timestamp_captura >= NOW() AT TIME ZONE 'UTC' - INTERVAL '5 minutes'
+  fpoa.timestamp_captura >= NOW() AT TIME ZONE 'UTC' - INTERVAL '10 minutes'
   AND fpoa.letreiro_linha IN (SELECT letreiro_linha FROM top_10_linhas);  
