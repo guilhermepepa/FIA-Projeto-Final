@@ -4,9 +4,12 @@ from pyspark.sql.functions import col, from_json, explode, lag, unix_timestamp, 
 from pyspark.sql.types import StructType, StructField, StringType, LongType, BooleanType, DoubleType, ArrayType, TimestampType, IntegerType
 from math import radians, sin, cos, sqrt, atan2
 import psycopg2
+from datetime import datetime
 
 def log_info(message):
-    print(f">>> [SPTRANS_SPEED_STREAM_LOG]: {message}")
+    now = datetime.now()
+    timestamp = now.strftime('%Y-%m-%d %H:%M:%S') + f',{now.microsecond // 1000:03d}'
+    print(f"{timestamp} >>> [SPTRANS_SPEED_STREAM_LOG]: {message}")
 
 def haversine(lon1, lat1, lon2, lat2):
     """Calcula a distância em metros entre duas coordenadas geográficas."""
@@ -52,7 +55,7 @@ def process_and_upsert(df_new_positions, epoch_id):
     df_calculations = df_with_history.filter(col("timestamp_captura") > col("prev_ts")) \
         .withColumn("distancia_m", expr("haversine(longitude, latitude, prev_lon, prev_lat)")) \
         .withColumn("tempo_s", unix_timestamp(col("timestamp_captura")) - unix_timestamp(col("prev_ts"))) \
-        .filter(col("tempo_s").isNotNull() & (col("tempo_s") > 10) & (col("tempo_s") < 240)) \
+        .filter(col("tempo_s").isNotNull() & (col("tempo_s") > 10) & (col("tempo_s") < 400)) \
         .withColumn("velocidade_kph", (col("distancia_m") / col("tempo_s")) * 3.6) \
         .filter(col("velocidade_kph") < 80) \
         .withColumn("esta_parado", when((col("distancia_m") < 50) & (col("tempo_s") > 300), 1).otherwise(0))

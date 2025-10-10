@@ -5,9 +5,10 @@ WITH latest_time AS (
   FROM
     fato_onibus_parados_linha
 )
--- Agora, para esse id_tempo, somamos a quantidade de onibus parados de todas as linhas
+-- Agora, para esse id_tempo, somamos a quantidade de ônibus parados de todas as linhas
 SELECT
-  SUM(fop.quantidade_onibus_parados) AS "Total de Ônibus Parados"
+  -- COALESCE transforma o resultado NULL em 0 se não houver linhas para somar.
+  COALESCE(SUM(fop.quantidade_onibus_parados), 0) AS "Total de Ônibus Parados"
 FROM
   fato_onibus_parados_linha AS fop
 WHERE

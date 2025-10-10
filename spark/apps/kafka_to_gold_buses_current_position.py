@@ -2,10 +2,12 @@ from pyspark.sql import SparkSession, Window
 from pyspark.sql.functions import col, from_json, explode, row_number, desc
 from pyspark.sql.types import StructType, StructField, StringType, LongType, BooleanType, DoubleType, ArrayType, TimestampType
 import psycopg2
+from datetime import datetime
 
 def log_info(message):
-    """Função auxiliar para imprimir logs formatados."""
-    print(f">>> [SPTRANS_STREAMING_LOG]: {message}")
+    now = datetime.now()
+    timestamp = now.strftime('%Y-%m-%d %H:%M:%S') + f',{now.microsecond // 1000:03d}'
+    print(f"{timestamp} >>> [SPTRANS_POSITION_STREAM_LOG]: {message}")
 
 def upsert_to_postgres(df, epoch_id):
     log_info(f"Iniciando micro-lote {epoch_id}...")
