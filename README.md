@@ -68,7 +68,9 @@ A arquitetura é composta por dois pipelines que processam os mesmos dados de or
 
 ## Dashboards
 - Batch
+  <img width="1862" height="518" alt="image" src="https://github.com/user-attachments/assets/f74e4b5e-8d51-4e21-b2da-278d5c704502" />
   <img width="1846" height="449" alt="image" src="https://github.com/user-attachments/assets/f6f86c2b-714f-4e73-9281-6bb13b132c33" />
+  <img width="1109" height="592" alt="image" src="https://github.com/user-attachments/assets/b284b2f4-d443-48b9-9b6c-14dec1775903" />
 
 - Near real time
   <img width="1845" height="671" alt="image" src="https://github.com/user-attachments/assets/e81c4fe5-5c66-468b-b142-025d51e2af03" />
