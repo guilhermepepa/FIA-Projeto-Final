@@ -73,6 +73,6 @@ A arquitetura é composta por dois pipelines que processam os mesmos dados de or
   <img width="1109" height="592" alt="image" src="https://github.com/user-attachments/assets/b284b2f4-d443-48b9-9b6c-14dec1775903" />
 
 - Near real time
-  <img width="1845" height="671" alt="image" src="https://github.com/user-attachments/assets/e81c4fe5-5c66-468b-b142-025d51e2af03" />
+  <img width="1826" height="840" alt="image" src="https://github.com/user-attachments/assets/3485ca99-c511-4917-8187-8c762f10b671" />
   <img width="1845" height="599" alt="image" src="https://github.com/user-attachments/assets/d3c86efd-dc59-424d-ae11-975b392549b4" />
   <img width="1847" height="602" alt="image" src="https://github.com/user-attachments/assets/e17b8971-e17f-4f52-a791-401307b625f4" />
