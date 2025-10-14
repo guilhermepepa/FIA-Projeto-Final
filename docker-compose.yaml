@@ -75,34 +75,64 @@ services:
       - sptrans-network
 
   spark-master:
-    image: bitnami/spark:3.5
+    image: apache/spark:3.5.7-java17-python3
     container_name: spark-master
     hostname: spark-master
     user: root
     ports:
       - "8080:8080"
       - "7077:7077"
-    environment:
-      - SPARK_MODE=master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     volumes:
-      - ./spark/apps:/opt/bitnami/spark/apps
+      - ./spark/apps:/opt/spark/apps
     networks:
       - sptrans-network
 
   spark-worker:
-    image: bitnami/spark:3.5
+    image: apache/spark:3.5.7-java17-python3
     container_name: spark-worker
     depends_on:
       - spark-master
     user: root
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
       - SPARK_WORKER_OPTS=-Dspark.worker.cleanup.enabled=true -Dspark.worker.cleanup.interval=300 -Dspark.worker.cleanup.appDataTtl=3600
     volumes:
-      - ./spark/apps:/opt/bitnami/spark/apps
+      - ./spark/apps:/opt/spark/apps
     networks:
       - sptrans-network
+
+  spark-streaming-processor-buses-current-position:
+    image: apache/spark:3.5.7-java17-python3
+    container_name: spark-streaming-processor-buses-current-position
+    depends_on:
+      - spark-master
+      - kafka-setup
+    user: root
+    command: [ "/opt/spark/apps/entrypoint_streaming_buses_current_position.sh" ]
+    environment:
+      - TZ="America/Sao_Paulo"
+    restart: always
+    volumes:
+      - ./spark/apps:/opt/spark/apps
+    networks:
+      - sptrans-network
+
+  spark-streaming-processor-buses-average-speed:
+    image: apache/spark:3.5.7-java17-python3
+    container_name: spark-streaming-processor-buses-average-speed
+    depends_on:
+      - spark-master
+      - kafka-setup
+    user: root
+    command: [ "/opt/spark/apps/entrypoint_streaming_buses_average_speed.sh" ]
+    environment:
+      - TZ="America/Sao_Paulo"
+    restart: always
+    volumes:
+      - ./spark/apps:/opt/spark/apps
+    networks:
+      - sptrans-network 
 
   airflow-init:
     image: apache/airflow:${AIRFLOW_VERSION:-2.8.1}
@@ -183,7 +213,6 @@ services:
       - sptrans-network
 
 
-  # --- NOVOS SERVIÇOS KAFKA ---
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.3
     container_name: zookeeper
@@ -228,37 +257,6 @@ services:
     networks:
       - sptrans-network
   
-  # --- NOVOS SERVIÇOS DE PROCESSAMENTO STREAMING ---
-  spark-streaming-processor-buses-current-position:
-    image: bitnami/spark:3.5
-    container_name: spark-streaming-processor-buses-current-position
-    depends_on:
-      - spark-master
-      - kafka-setup
-    command: [ "/opt/bitnami/spark/apps/entrypoint_streaming_buses_current_position.sh" ]
-    environment:
-      - TZ="America/Sao_Paulo"
-    restart: always
-    volumes:
-      - ./spark/apps:/opt/bitnami/spark/apps
-    networks:
-      - sptrans-network
-
-  spark-streaming-processor-buses-average-speed:
-    image: bitnami/spark:3.5
-    container_name: spark-streaming-processor-buses-average-speed
-    depends_on:
-      - spark-master
-      - kafka-setup
-    command: [ "/opt/bitnami/spark/apps/entrypoint_streaming_buses_average_speed.sh" ]
-    environment:
-      - TZ="America/Sao_Paulo"
-    restart: always
-    volumes:
-      - ./spark/apps:/opt/bitnami/spark/apps
-    networks:
-      - sptrans-network      
-
   metabase:
     image: metabase/metabase:latest
     container_name: metabase
@@ -286,9 +284,3 @@ volumes:
   nifi_conf:
   nifi_data:
   spark_ivy_cache:
-  spark_apps_volume:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./spark/apps

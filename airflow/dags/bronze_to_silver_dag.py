@@ -15,9 +15,10 @@ with DAG(
 ) as dag:
 
     command = (
-        "spark-submit "
+        "/opt/spark/bin/spark-submit "
         "--master spark://spark-master:7077 "
-        "/opt/bitnami/spark/apps/bronze_to_silver.py "
+        "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 "
+        "/opt/spark/apps/bronze_to_silver.py "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%m') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%d') }} "
@@ -26,16 +27,22 @@ with DAG(
 
     submit_spark_job_docker = DockerOperator(
         task_id="submit_bronze_to_silver_spark_job",
-        image="bitnami/spark:3.5",
+        image="apache/spark:3.5.7-java17-python3",
         command=command,
         network_mode="fia-projeto-final_sptrans-network",
         auto_remove=True,
+        user='root',
         mount_tmp_dir=False,
         mounts=[
             Mount(
                 source="/c/Users/guilherme/Desktop/FIA/Docker/FIA-Projeto-Final/spark/apps",
-                target="/opt/bitnami/spark/apps",
+                target="/opt/spark/apps",
                 type="bind"
+            ),
+            Mount(
+                source="fia-projeto-final_spark_ivy_cache", # Nome do projeto + nome do volume
+                target="/root/.ivy2",         # Pasta de cache do Ivy dentro do container
+                type="volume"
             )
         ],
         outlets=[silver_sptrans_posicoes]

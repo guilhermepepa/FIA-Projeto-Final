@@ -5,8 +5,6 @@ from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
 import os
 
-host_spark_apps_path = os.environ.get("HOST_SPARK_APPS_DIR")
-
 with DAG(
     dag_id="create_dimensions",
     start_date=pendulum.datetime(2025, 9, 26, tz="America/Sao_Paulo"),
@@ -16,15 +14,15 @@ with DAG(
 ) as dag:
     
     spark_command = (
-        "spark-submit "
+        "/opt/spark/bin/spark-submit "
         "--master spark://spark-master:7077 "
         "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0 "
-        "/opt/bitnami/spark/apps/create_dim_linha.py"
+        "/opt/spark/apps/create_dim_linha.py"
     )
 
     task_create_dim_linha = DockerOperator(
         task_id="spark_job_create_dim_linha",
-        image="bitnami/spark:3.5",
+        image="apache/spark:3.5.7-java17-python3",
         command=spark_command,
         network_mode="fia-projeto-final_sptrans-network",
         auto_remove=True,
@@ -32,7 +30,7 @@ with DAG(
         mounts=[
             Mount(
                 source="/c/Users/guilherme/Desktop/FIA/Docker/FIA-Projeto-Final/spark/apps",
-                target="/opt/bitnami/spark/apps",
+                target="/opt/spark/apps",
                 type="bind",
             ),
             Mount(

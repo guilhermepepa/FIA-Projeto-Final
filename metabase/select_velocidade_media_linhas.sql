@@ -1,18 +1,25 @@
--- Usamos uma CTE para encontrar o id_tempo mais recente com dados
-WITH latest_time AS (
+-- 1. CTE para calcular a média "bruta" para cada intervalo de 10 minutos
+WITH media_por_intervalo AS (
   SELECT
-    MAX(id_tempo) AS latest_id_tempo
+    date_trunc('hour', fvl.updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') +
+    floor(extract(minute from fvl.updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') / 10) * interval '10 minutes'
+    AS "intervalo_de_10_minutos",
+    
+    ROUND(AVG(fvl.velocidade_media_kph)::numeric, 2) AS "velocidade_media_bruta"
   FROM
-    fato_velocidade_linha
+    fato_velocidade_linha fvl
+  WHERE
+    -- Filtra um período recente para otimizar o cálculo inicial
+    fvl.updated_at >= ((SELECT MAX(updated_at) FROM fato_velocidade_linha) - INTERVAL '1 hour')
+    AND fvl.velocidade_media_kph > 0
+  GROUP BY
+    1 -- Agrupa pelo intervalo
 )
--- Agora, para esse id_tempo, calculamos a média geral da velocidade
+-- 2. Seleção final para pegar APENAS o valor do último intervalo de tempo
 SELECT
-  -- Arredondamos para 2 casas decimais para uma melhor visualização
-  ROUND(AVG(fvl.velocidade_media_kph)::numeric, 2) AS "velocidade_media_geral"
+  velocidade_media_bruta AS "Velocidade Média da Frota (Agora)"
 FROM
-  fato_velocidade_linha AS fvl
-WHERE
-  -- Filtra para buscar apenas os dados do período de tempo mais recente
-  fvl.id_tempo = (SELECT latest_id_tempo FROM latest_time)
-  -- Garante que estamos calculando a média apenas para linhas que tiveram movimento
-  AND fvl.velocidade_media_kph > 0;
+  media_por_intervalo
+ORDER BY
+  intervalo_de_10_minutos DESC -- Ordena do mais recente para o mais antigo
+LIMIT 1; -- Pega apenas o primeiro resultado (o mais recente)

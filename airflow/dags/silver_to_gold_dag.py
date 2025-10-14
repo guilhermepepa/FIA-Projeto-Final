@@ -16,10 +16,10 @@ with DAG(
 ) as dag:
     
     command = (
-        "spark-submit "
+        "/opt/spark/bin/spark-submit "
         "--master spark://spark-master:7077 "
         "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0 "
-        "/opt/bitnami/spark/apps/silver_to_gold.py "
+        "/opt/spark/apps/silver_to_gold.py "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%m') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%d') }} "
@@ -38,7 +38,7 @@ with DAG(
     # TAREFA 2: Rodar o Spark para popular a tabela de staging
     task_spark_silver_to_gold  = DockerOperator(
         task_id="submit_silver_to_gold_spark_job",
-        image="bitnami/spark:3.5",
+        image="apache/spark:3.5.7-java17-python3",
         command=command,
         network_mode="fia-projeto-final_sptrans-network",
         auto_remove=True,
@@ -46,7 +46,7 @@ with DAG(
         mounts=[
             Mount(
                 source="/c/Users/guilherme/Desktop/FIA/Docker/FIA-Projeto-Final/spark/apps",
-                target="/opt/bitnami/spark/apps",
+                target="/opt/spark/apps",
                 type="bind",
             ),
             Mount(

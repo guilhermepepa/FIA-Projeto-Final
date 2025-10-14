@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e # Sair imediatamente se um comando falhar
 
-echo ">>> [STREAMING_PROCESSOR]: A instalar dependências Python..."
+echo ">>> [STREAMING_PROCESSOR - POSITIONS]: Instalando dependências Python..."
 pip install psycopg2-binary
 
-echo ">>> [STREAMING_PROCESSOR]: A executar spark-submit..."
-spark-submit \
+echo ">>> [STREAMING_PROCESSOR - POSITIONS]: Executando spark-submit..."
+/opt/spark/bin/spark-submit \
   --master spark://spark-master:7077 \
   --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.6.0,org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 \
   --total-executor-cores 1 \
-  /opt/bitnami/spark/apps/kafka_to_gold_buses_current_position.py
+  /opt/spark/apps/kafka_to_gold_buses_current_position.py
