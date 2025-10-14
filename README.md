@@ -28,7 +28,7 @@ O projeto utiliza arquitetura medalhão, com três camadas de dados:
     * Apache Kafka: Um tópico (sptrans_posicoes_raw) que recebe as mesmas mensagens JSON da API em tempo real. Serve como um buffer de alta performance para os pipelines de streaming.
 
 - **Camada Silver (Dados Limpos)**
-   - Arquivos Parquet contendo o histórico detalhado e "achatado" de todas as posições de ônibus, particionados por ano/mes/dia. Esta camada foi otimizada para análises de contagem e não contém dados de geolocalização:
+   - Arquivos Parquet contendo o histórico detalhado e "achatado" de todas as posições de ônibus, particionados por ano/mes/dia. Esta camada foi otimizada para análises de contagem para a camada batch que funciona de hora em hora e não contém dados de geolocalização:
      
      <img width="133" height="160" alt="image" src="https://github.com/user-attachments/assets/03b13267-8a3e-4afe-a558-684db45ad540" />
 
@@ -55,26 +55,24 @@ A arquitetura é composta por dois pipelines que processam os mesmos dados de or
    
       * **2) Transformação (Bronze -> Silver):** Um job Spark (bronze_to_silver_incremental.py), orquestrado por uma DAG no Airflow para rodar de hora em hora, lê todos os JSONs da hora anterior na camada Bronze. O script "achata" a estrutura aninhada através de operações de explode. As colunas letreiro_linha, codigo_linha, prefixo_onibus, acessivel e timestamp_captura_str são gravadas em arquivos Parquet na camada Silver, gerando uma tabela "flat" otimizada para análises históricas.
    
-      * **3) Agregação (Silver -> Gold):** Um segundo job Spark (silver_to_gold.py), orquestrado pelo Airflow e acionado pela conclusão do job anterior (via Datasets), lê os arquivos Parquet da camada Silver. A transformação principal agrupa os dados por linha e conta o número de ônibus únicos. Em seguida, ele enriquece esses dados fazendo uma junção com as tabelas dim_linha e dim_tempo para obter as chaves id_linha e id_tempo, formando a tabela fato fato_operacao_linhas_hora. O resultado é salvo no PostgreSQL de forma idempotente, usando uma tabela de staging e um processo de DELETE/INSERT orquestrado pelo Airflow.
+      * **3) Agregação (Silver -> Gold):** Um segundo job Spark (silver_to_gold.py), orquestrado pelo Airflow e acionado pela conclusão do job anterior (via um Dataset), lê os arquivos Parquet da camada Silver. A transformação principal agrupa os dados por linha e conta o número de ônibus únicos. Em seguida, ele enriquece esses dados fazendo uma junção com as tabelas dim_linha e dim_tempo para obter as chaves id_linha e id_tempo, formando a tabela fato fato_operacao_linhas_hora. O resultado é salvo no PostgreSQL de forma idempotente, usando uma tabela de staging e um processo de DELETE/INSERT orquestrado pelo Airflow.
    
    - **Pipelines de Tempo Quase Real (Streaming)**
    
-      * **1) Processamento de Posições (Kafka -> Gold):** Paralelamente ao fluxo de lote, uma aplicação em PySpark Streaming (silver_to_gold_posicao_atual_onibus.py) roda de forma contínua (24/7). Ela lê os dados brutos do tópico do Kafka, extrai a posição mais recente de cada ônibus em cada micro-lote e atualiza a tabela fato_posicao_onibus_atual no PostgreSQL usando um comando UPSERT (INSERT ... ON CONFLICT). Este pipeline garante que o mapa do Metabase tenha sempre a última localização conhecida de cada veículo.
+      * **1) Processamento de Posições (Kafka -> Gold):** Paralelamente ao fluxo de batch, uma aplicação em PySpark Streaming (kafka_to_gold_buses_current_position.py) roda de forma contínua (24/7). Ela lê os dados brutos do tópico do Kafka a cada 2 minutos, extrai a posição mais recente de cada ônibus em cada micro-lote e atualiza a tabela fato_posicao_onibus_atual no PostgreSQL usando um comando UPSERT (INSERT ... ON CONFLICT). Este pipeline garante que o mapa do Metabase tenha sempre a última localização conhecida de cada ônibus.
    
-      * **2) Processamento de KPIs Operacionais (Kafka -> Gold):** Um segundo aplicativo PySpark Streaming (calculate_speed_streaming.py) também lê os dados do mesmo tópico do Kafka de forma independente. Este processo é "stateful": ele utiliza a tabela fato_posicao_onibus_atual como "memória" para comparar a posição atual de um ônibus com a sua posição anterior. Com base nessa comparação, ele calcula a velocidade média e identifica ônibus parados no trânsito. Os resultados agregados são então enriquecidos com as chaves das dimensões (id_linha, id_tempo) e salvos nas tabelas fato_velocidade_linha e fato_onibus_parados_linha no PostgreSQL, também usando uma lógica de UPSERT.
+      * **2) Processamento de KPIs Operacionais (Kafka -> Gold):** Uma segunda aplicação PySpark Streaming (kafka_to_gold_buses_average_speed.py) também lê os dados do mesmo tópico do Kafka de forma independente. Este processo utiliza a tabela fato_posicao_onibus_atual como "memória" para comparar a posição atual de um ônibus com a sua posição anterior. Com base nessa comparação, ele calcula a velocidade média e identifica ônibus parados no trânsito. Os resultados agregados são então enriquecidos com as chaves das dimensões (id_linha, id_tempo) e salvos nas tabelas fato_velocidade_linha e fato_onibus_parados_linha no PostgreSQL, também usando uma lógica de UPSERT.
 
 
 
 
 ## Dashboards
+- Batch
+  <img width="1862" height="518" alt="image" src="https://github.com/user-attachments/assets/f74e4b5e-8d51-4e21-b2da-278d5c704502" />
+  <img width="1846" height="449" alt="image" src="https://github.com/user-attachments/assets/f6f86c2b-714f-4e73-9281-6bb13b132c33" />
+  <img width="1109" height="592" alt="image" src="https://github.com/user-attachments/assets/b284b2f4-d443-48b9-9b6c-14dec1775903" />
 
-<img width="1826" height="531" alt="image" src="https://github.com/user-attachments/assets/675b97e1-7551-4261-82e3-aeeb34f11f7f" />
-
-<img width="1828" height="452" alt="image" src="https://github.com/user-attachments/assets/5d2abd2f-d9c2-4537-aeb9-98be658f30b8" />
-
-<img width="1230" height="611" alt="image" src="https://github.com/user-attachments/assets/084151b4-de69-4d3b-97ac-fe94491a3c76" />
-
-<img width="1824" height="612" alt="image" src="https://github.com/user-attachments/assets/51cd4243-84c7-4c93-b82a-17ff31ce2098" />
-
-<img width="916" height="533" alt="image" src="https://github.com/user-attachments/assets/b6aa1230-c92e-4855-9eb7-6e50102c3ad4" />
-
+- Near real time
+  <img width="1826" height="840" alt="image" src="https://github.com/user-attachments/assets/3485ca99-c511-4917-8187-8c762f10b671" />
+  <img width="1845" height="599" alt="image" src="https://github.com/user-attachments/assets/d3c86efd-dc59-424d-ae11-975b392549b4" />
+  <img width="1847" height="602" alt="image" src="https://github.com/user-attachments/assets/e17b8971-e17f-4f52-a791-401307b625f4" />
