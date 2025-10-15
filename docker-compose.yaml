@@ -275,6 +275,25 @@ services:
     networks:
       - sptrans-network
 
+  api:
+    build: ./api
+    container_name: api
+    hostname: api
+    depends_on:
+      - postgres
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./api:/app
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=sptrans_dw
+      - DB_USER=admin
+      - DB_PASS=projetofinal
+      - TZ="America/Sao_Paulo"
+    networks:
+      - sptrans-network
+
 networks:
   sptrans-network:
     driver: bridge
