@@ -14,9 +14,10 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 - **Transformação:** PySpark (Batch e Streaming)
 - **Data Warehouse:** PostgreSQL 
 - **Visualização:** Metabase (http://localhost:3000)
+- **API:** FastAPI (http://localhost:8002)
   
 Visão geral:
-<img width="1275" height="795" alt="image" src="https://github.com/user-attachments/assets/98d0a0b6-86db-430f-a5dc-8308b12fc196" />
+<img width="1521" height="944" alt="image" src="https://github.com/user-attachments/assets/4df1b725-616a-4132-913a-06c3ff3530cb" />
 
 
 
@@ -33,7 +34,7 @@ O projeto utiliza arquitetura medalhão, com três camadas de dados:
      <img width="133" height="160" alt="image" src="https://github.com/user-attachments/assets/03b13267-8a3e-4afe-a558-684db45ad540" />
 
 - **Camada Gold (Dados Agregados e de Servir)**
-   - Banco de dados no Postgres com tabelas agregadas para facilitar a geração de dashboards:
+   - Banco de dados no Postgres com tabelas agregadas para facilitar a geração de dashboards e disponiblização de dados via API:
   
      <img width="691" height="519" alt="image" src="https://github.com/user-attachments/assets/ef9b22c5-49b1-4a59-981d-a16a55aa755a" />
 
@@ -51,7 +52,7 @@ A arquitetura é composta por dois pipelines que processam os mesmos dados de or
 
    - **Pipeline de Análise Histórica (Batch)**
    
-      * **1) Ingestão (API -> Bronze):** A API /Posicoes da SPTrans, que devolve uma lista aninhada de linhas e veículos, é consultada a cada 2 minutos por um processo no NiFi. A resposta JSON completa é salva simultaneamente em dois destinos: na camada Bronze do MinIO para armazenamento histórico e em um tópico do Apache Kafka para processamento em tempo quase real (*detalhado no segundo pipeline*).
+      * **1) Ingestão (API SPTrans -> Bronze):** A API /Posicoes da SPTrans, que devolve uma lista aninhada de linhas e veículos, é consultada a cada 2 minutos por um processo no NiFi. A resposta JSON completa é salva simultaneamente em dois destinos: na camada Bronze do MinIO para armazenamento histórico e em um tópico do Apache Kafka para processamento em tempo quase real (*detalhado no segundo pipeline*).
    
       * **2) Transformação (Bronze -> Silver):** Um job Spark (bronze_to_silver_incremental.py), orquestrado por uma DAG no Airflow para rodar de hora em hora, lê todos os JSONs da hora anterior na camada Bronze. O script "achata" a estrutura aninhada através de operações de explode. As colunas letreiro_linha, codigo_linha, prefixo_onibus, acessivel e timestamp_captura_str são gravadas em arquivos Parquet na camada Silver, gerando uma tabela "flat" otimizada para análises históricas.
    
@@ -64,13 +65,14 @@ A arquitetura é composta por dois pipelines que processam os mesmos dados de or
       * **2) Processamento de KPIs Operacionais (Kafka -> Gold):** Uma segunda aplicação PySpark Streaming (kafka_to_gold_buses_average_speed.py) também lê os dados do mesmo tópico do Kafka de forma independente. Este processo utiliza a tabela fato_posicao_onibus_atual como "memória" para comparar a posição atual de um ônibus com a sua posição anterior. Com base nessa comparação, ele calcula a velocidade média e identifica ônibus parados no trânsito. Os resultados agregados são então enriquecidos com as chaves das dimensões (id_linha, id_tempo) e salvos nas tabelas fato_velocidade_linha e fato_onibus_parados_linha no PostgreSQL, também usando uma lógica de UPSERT.
 
 
-
+## API
+  <img width="1435" height="752" alt="image" src="https://github.com/user-attachments/assets/3e602bf0-f1dd-4a75-a3bd-3abc22041501" />
 
 ## Dashboards
 - Batch
-  <img width="1862" height="518" alt="image" src="https://github.com/user-attachments/assets/f74e4b5e-8d51-4e21-b2da-278d5c704502" />
-  <img width="1846" height="449" alt="image" src="https://github.com/user-attachments/assets/f6f86c2b-714f-4e73-9281-6bb13b132c33" />
-  <img width="1109" height="592" alt="image" src="https://github.com/user-attachments/assets/b284b2f4-d443-48b9-9b6c-14dec1775903" />
+  <img width="1846" height="527" alt="image" src="https://github.com/user-attachments/assets/67616d68-7f63-4be3-a0fc-36b21550fc21" />
+  <img width="1845" height="451" alt="image" src="https://github.com/user-attachments/assets/d0798a38-d6ff-4d51-b4ac-7f867aa7bfa9" />
+  <img width="1551" height="606" alt="image" src="https://github.com/user-attachments/assets/516103ef-f088-4386-8642-88bd84aa51a8" />
 
 - Near real time
   <img width="1826" height="840" alt="image" src="https://github.com/user-attachments/assets/3485ca99-c511-4917-8187-8c762f10b671" />
