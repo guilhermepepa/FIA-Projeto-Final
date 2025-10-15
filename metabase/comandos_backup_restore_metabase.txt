@@ -1,3 +1,5 @@
+#BACKUP
 docker-compose exec postgres pg_dump -U admin -d metabase_meta > metabase_backup.sql
 
+#RESTORE
 docker-compose exec -T postgres psql -U admin -d metabase_meta < metabase_backup.sql

@@ -82,18 +82,44 @@ def get_frota_congestionada(conn=Depends(get_db_connection)):
 
 @app.get("/kpis/velocidade-media-frota", response_model=KpiFloatResponse, tags=["KPIs (Near Real Time)"])
 def get_velocidade_media(conn=Depends(get_db_connection)):
-    """Retorna a velocidade operacional média (percentil 85) de toda a frota na última hora processada."""
+    """Retorna a tendência da velocidade média da frota (média móvel de 30 min)."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
-            WITH latest_time AS (
-              SELECT MAX(id_tempo) AS latest_id_tempo FROM fato_velocidade_linha
+            WITH media_por_intervalo AS (
+              SELECT
+                date_trunc('hour', updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') +
+                floor(extract(minute from updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') / 10) * interval '10 minutes'
+                AS intervalo_de_10_minutos,
+                ROUND(AVG(velocidade_media_kph)::numeric, 2) AS velocidade_media_bruta
+              FROM
+                fato_velocidade_linha
+              WHERE
+                updated_at >= ((SELECT MAX(updated_at) FROM fato_velocidade_linha) - INTERVAL '1 hour')
+                AND velocidade_media_kph > 0
+              GROUP BY 1
+            ),
+            media_movel AS (
+              SELECT
+                intervalo_de_10_minutos,
+                ROUND(
+                  AVG(velocidade_media_bruta) OVER (
+                    ORDER BY intervalo_de_10_minutos
+                    ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+                  )::numeric,
+                  2
+                ) AS tendencia
+              FROM
+                media_por_intervalo
             )
-            SELECT COALESCE(ROUND(AVG(fvl.velocidade_media_kph)::numeric, 2), 0.0) AS valor
-            FROM fato_velocidade_linha AS fvl
-            WHERE fvl.id_tempo = (SELECT latest_id_tempo FROM latest_time) AND fvl.velocidade_media_kph > 0;
+            SELECT COALESCE(tendencia, 0.0) AS valor
+            FROM media_movel
+            ORDER BY intervalo_de_10_minutos DESC
+            LIMIT 1;
         """
         cur.execute(query)
         result = cur.fetchone()
+        if not result:
+            return {"valor": 0.0}
         return result
 
 @app.get("/rankings/linhas-mais-operantes", response_model=List[LinhaRankingQuantidade], tags=["Rankings Históricos (Batch)"])
