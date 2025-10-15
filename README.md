@@ -34,7 +34,7 @@ O projeto utiliza arquitetura medalhão, com três camadas de dados:
      <img width="133" height="160" alt="image" src="https://github.com/user-attachments/assets/03b13267-8a3e-4afe-a558-684db45ad540" />
 
 - **Camada Gold (Dados Agregados e de Servir)**
-   - Banco de dados no Postgres com tabelas agregadas para facilitar a geração de dashboards e disponiblização de dados via API:
+   - Banco de dados no Postgres com tabelas agregadas para facilitar a geração de dashboards e disponibilização de dados via API:
   
      <img width="691" height="519" alt="image" src="https://github.com/user-attachments/assets/ef9b22c5-49b1-4a59-981d-a16a55aa755a" />
 
