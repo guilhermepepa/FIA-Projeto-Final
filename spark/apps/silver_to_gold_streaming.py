@@ -130,25 +130,25 @@ def process_silver_to_gold(df_micro_batch, epoch_id):
 
     
     # --- TAREFA 3: ARQUITETURA LAMBDA - ATUALIZAÇÃO PROVISÓRIA ---
-    log_info("Iniciando Tarefa 3: Atualização provisória da tabela de operação (Lambda).")
-    df_contagem_provisoria = df_micro_batch.groupBy(hour("timestamp_captura").alias("hora_referencia"), to_date("timestamp_captura").alias("data_referencia"), "letreiro_linha") \
-                                           .agg(countDistinct("prefixo_onibus").alias("quantidade_onibus"))
+    #log_info("Iniciando Tarefa 3: Atualização provisória da tabela de operação (Lambda).")
+    #df_contagem_provisoria = df_micro_batch.groupBy(hour("timestamp_captura").alias("hora_referencia"), to_date("timestamp_captura").alias("data_referencia"), "letreiro_linha") \
+    #                                       .agg(countDistinct("prefixo_onibus").alias("quantidade_onibus"))
     
-    df_dim_linha_lambda = spark.read.jdbc(url=db_url, table="dim_linha", properties=db_properties)
-    df_dim_tempo_lambda = spark.read.jdbc(url=db_url, table="dim_tempo", properties=db_properties)
-    df_contagem_com_ids = df_contagem_provisoria.join(df_dim_linha_lambda, "letreiro_linha", "inner").join(df_dim_tempo_lambda, ["data_referencia", "hora_referencia"], "inner")
-    df_contagem_final = df_contagem_com_ids.select("id_tempo", "id_linha", "quantidade_onibus")
+    #df_dim_linha_lambda = spark.read.jdbc(url=db_url, table="dim_linha", properties=db_properties)
+    #df_dim_tempo_lambda = spark.read.jdbc(url=db_url, table="dim_tempo", properties=db_properties)
+    #df_contagem_com_ids = df_contagem_provisoria.join(df_dim_linha_lambda, "letreiro_linha", "inner").join(df_dim_tempo_lambda, ["data_referencia", "hora_referencia"], "inner")
+    #df_contagem_final = df_contagem_com_ids.select("id_tempo", "id_linha", "quantidade_onibus")
 
-    DeltaTable.createIfNotExists(spark).location(gold_path_operacao).addColumns(df_contagem_final.schema).execute()
-    delta_operacao = DeltaTable.forPath(spark, gold_path_operacao)
-    delta_operacao.alias("gold").merge(
-        df_contagem_final.alias("updates"),
-        "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha"
-    ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
-    log_info("MERGE para 'fato_operacao_linhas_hora' no Delta Lake concluído.")
+    #DeltaTable.createIfNotExists(spark).location(gold_path_operacao).addColumns(df_contagem_final.schema).execute()
+    #delta_operacao = DeltaTable.forPath(spark, gold_path_operacao)
+    #delta_operacao.alias("gold").merge(
+    #    df_contagem_final.alias("updates"),
+    #    "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha"
+    #).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+    #log_info("MERGE para 'fato_operacao_linhas_hora' no Delta Lake concluído.")
 
-    # --- TAREFA 4: CARREGAR DADOS PARA A CAMADA DE SERVIR (POSTGRES) ---
-    log_info("Iniciando Tarefa 4: Carregamento dos dados do Lakehouse para o PostgreSQL.")
+    # --- TAREFA 3: CARREGAR DADOS PARA A CAMADA DE SERVIR (POSTGRES) ---
+    log_info("Iniciando Tarefa 3: Carregamento dos dados do Lakehouse para o PostgreSQL.")
     
     # Carrega cada tabela Delta do Gold e a sobrescreve no Postgres, SE a tabela existir
     if DeltaTable.isDeltaTable(spark, gold_path_posicao):
