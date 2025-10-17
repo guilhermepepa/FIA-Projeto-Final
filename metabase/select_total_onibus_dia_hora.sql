@@ -11,7 +11,7 @@ latest_24_consolidated_times AS (
     fato_operacao_linhas_hora
   WHERE
     -- Despreza a hora mais recente para evitar dados parciais do streaming
-    id_tempo < (SELECT max_id_tempo FROM latest_complete_time)
+    id_tempo <= (SELECT max_id_tempo FROM latest_complete_time)
   ORDER BY
     id_tempo DESC
   LIMIT 24
