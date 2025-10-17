@@ -79,7 +79,7 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
   
           - b. Calcula a contagem definitiva de ônibus únicos por linha.
   
-          - c. Usa o comando MERGE para atualizar (ou inserir) essa contagem definitiva na tabela fato_operacao_linhas_hora na Camada Gold do Lakehouse (MinIO), sobrescrevendo os dados provisórios que foram gerados pelo pipeline de streaming.
+          - c. Usa o comando MERGE para atualizar (ou inserir) a contagem definitiva na tabela fato_operacao_linhas_hora na Camada Gold do Lakehouse (MinIO).
   
           - d. Carga para a Camada de Servir: Como passo final, o job lê a tabela fato_operacao_linhas_hora completa do Lakehouse e a sobrescreve na tabela correspondente no PostgreSQL, garantindo que os dashboards de BI tenham os dados históricos mais precisos.
    
@@ -89,15 +89,13 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
         
       * **2) Transformação (Kafka -> Silver Streaming):** Uma aplicação Spark Streaming (bronze_to_silver_streaming.py) consome as mensagens do Kafka. Ela "achata" a estrutura JSON e escreve os dados limpos em uma Tabela Delta Lake (posicoes_onibus_streaming) na camada Silver, otimizada para leituras incrementais.
    
-      * **3) Agregação e Atualização (Silver Streaming -> Gold):** Uma segunda e mais complexa aplicação Spark Streaming (silver_to_gold_streaming.py) lê os novos dados da tabela Delta de streaming e executa várias tarefas em cada micro-lote:
+      * **3) Agregação e Atualização (Silver Streaming -> Gold):** Uma segunda aplicação Spark Streaming (silver_to_gold_streaming.py) lê os novos dados da tabela Delta de streaming e executa várias tarefas em cada micro-lote:
     
           - a. KPIs Operacionais: Usa a tabela fato_posicao_onibus_atual como "memória" para calcular a velocidade e identificar ônibus parados. Em seguida, usa MERGE para atualizar as tabelas fato_velocidade_linha e fato_onibus_parados_linha na Camada Gold do Lakehouse (MinIO).
           
           - b. Posição Atual: Atualiza a "memória" de posições, usando MERGE para fazer o UPSERT da última posição conhecida de cada ônibus na tabela fato_posicao_onibus_atual no Lakehouse (MinIO).
           
-          - c. (Velocidade Lambda) Calcula uma contagem provisória de ônibus por linha para a hora atual e usa MERGE para atualizar a tabela fato_operacao_linhas_hora no Lakehouse (MinIO).
-          
-          - d. Carga para a Camada de Servir: Ao final do lote, o job lê as tabelas de fatos recém-atualizadas do Lakehouse (fato_posicao_onibus_atual, fato_velocidade_linha, etc.) e as sobrescreve no PostgreSQL para consumo imediato pela API e pelos dashboards.
+          - c. Carga para a Camada de Servir: Ao final do lote, o job lê as tabelas de fatos recém-atualizadas do Lakehouse (fato_posicao_onibus_atual, fato_velocidade_linha, etc.) e as sobrescreve no PostgreSQL para consumo imediato pela API e pelos dashboards.
 
 
 ## API
