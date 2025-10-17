@@ -1,25 +1,30 @@
--- 1. CTE para calcular a média "bruta" para cada intervalo de 10 minutos
-WITH media_por_intervalo AS (
+-- 1. CTE para encontrar o id_tempo mais recente com dados em AMBAS as tabelas de fato
+WITH latest_time AS (
   SELECT
-    date_trunc('hour', fvl.updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') +
-    floor(extract(minute from fvl.updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') / 10) * interval '10 minutes'
-    AS "intervalo_de_10_minutos",
-    
-    ROUND(AVG(fvl.velocidade_media_kph)::numeric, 2) AS "velocidade_media_bruta"
+    MAX(fvl.id_tempo) AS latest_id_tempo
   FROM
-    fato_velocidade_linha fvl
-  WHERE
-    -- Filtra um período recente para otimizar o cálculo inicial
-    fvl.updated_at >= ((SELECT MAX(updated_at) FROM fato_velocidade_linha) - INTERVAL '1 hour')
-    AND fvl.velocidade_media_kph > 0
-  GROUP BY
-    1 -- Agrupa pelo intervalo
+    fato_velocidade_linha AS fvl
+    -- Garante que só consideramos os momentos em que temos dados de velocidade E de quantidade
+    INNER JOIN fato_operacao_linhas_hora AS folh ON fvl.id_tempo = folh.id_tempo AND fvl.id_linha = folh.id_linha
 )
--- 2. Seleção final para pegar APENAS o valor do último intervalo de tempo
+-- 2. Agora, para esse id_tempo, calculamos a média ponderada
 SELECT
-  velocidade_media_bruta AS "Velocidade Média da Frota (Agora)"
+  -- Garante que o resultado seja 0 se a soma de ônibus for nula ou zero
+  COALESCE(
+    -- SOMA(velocidade * quantidade)
+    SUM(fvl.velocidade_media_kph * folh.quantidade_onibus)
+    -- a dividir por SOMA(quantidade)
+    / NULLIF(SUM(folh.quantidade_onibus), 0),
+    0
+  ) AS "Velocidade Média da Frota (km/h)"
 FROM
-  media_por_intervalo
-ORDER BY
-  intervalo_de_10_minutos DESC -- Ordena do mais recente para o mais antigo
-LIMIT 1; -- Pega apenas o primeiro resultado (o mais recente)
+  fato_velocidade_linha AS fvl
+  -- Junta com a tabela de operação para obter a quantidade de ônibus (a nossa "ponderação")
+  JOIN fato_operacao_linhas_hora AS folh ON fvl.id_tempo = folh.id_tempo AND fvl.id_linha = folh.id_linha
+WHERE
+  -- Filtra para buscar apenas os dados do período de tempo mais recente
+  fvl.id_tempo = (SELECT latest_id_tempo FROM latest_time)
+  -- Ignora linhas onde a velocidade ou a quantidade não são positivas
+  AND fvl.velocidade_media_kph > 0
+  AND folh.quantidade_onibus > 0;
+

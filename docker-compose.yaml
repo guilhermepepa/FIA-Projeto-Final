@@ -31,6 +31,7 @@ services:
       echo 'MinIO pronto. Criando buckets...';
       /usr/bin/mc mb local/bronze --ignore-existing;
       /usr/bin/mc mb local/silver --ignore-existing;
+      /usr/bin/mc mb local/gold --ignore-existing;
       echo 'Buckets criados.';
       echo 'Copiando arquivos GTFS para a camada bronze...';
       /usr/bin/mc cp --recursive /gtfs-data-local/ local/bronze/gtfs/;
@@ -102,37 +103,39 @@ services:
     networks:
       - sptrans-network
 
-  spark-streaming-processor-buses-current-position:
+  spark-streaming-bronze-to-silver:
     image: apache/spark:3.5.7-java17-python3
-    container_name: spark-streaming-processor-buses-current-position
+    container_name: spark-streaming-bronze-to-silver
     depends_on:
       - spark-master
       - kafka-setup
     user: root
-    command: [ "/opt/spark/apps/entrypoint_streaming_buses_current_position.sh" ]
+    command: [ "/opt/spark/apps/entrypoints/entrypoint_bronze_to_silver_streaming.sh" ]
     environment:
       - TZ="America/Sao_Paulo"
-    restart: always
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=projetofinal
     volumes:
       - ./spark/apps:/opt/spark/apps
     networks:
       - sptrans-network
 
-  spark-streaming-processor-buses-average-speed:
+  spark-streaming-silver-to-gold:
     image: apache/spark:3.5.7-java17-python3
-    container_name: spark-streaming-processor-buses-average-speed
+    container_name: spark-streaming-silver-to-gold
     depends_on:
       - spark-master
       - kafka-setup
     user: root
-    command: [ "/opt/spark/apps/entrypoint_streaming_buses_average_speed.sh" ]
+    command: [ "/opt/spark/apps/entrypoints/entrypoint_silver_to_gold_streaming.sh" ]
     environment:
       - TZ="America/Sao_Paulo"
-    restart: always
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=projetofinal
     volumes:
       - ./spark/apps:/opt/spark/apps
     networks:
-      - sptrans-network 
+      - sptrans-network
 
   airflow-init:
     image: apache/airflow:${AIRFLOW_VERSION:-2.8.1}
@@ -256,7 +259,7 @@ services:
       "
     networks:
       - sptrans-network
-  
+
   metabase:
     image: metabase/metabase:latest
     container_name: metabase

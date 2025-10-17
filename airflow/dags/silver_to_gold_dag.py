@@ -4,6 +4,7 @@ from airflow.models.dag import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from docker.types import Mount
+from datetime import timedelta
 
 from datasets import silver_sptrans_posicoes
 
@@ -18,25 +19,18 @@ with DAG(
     command = (
         "/opt/spark/bin/spark-submit "
         "--master spark://spark-master:7077 "
-        "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0 "
-        "/opt/spark/apps/silver_to_gold.py "
+        "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0,io.delta:delta-spark_2.12:3.2.0 "
+        '--conf "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension" '
+        '--conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog" '
+        "/opt/spark/apps/silver_to_gold_batch.py "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%m') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%d') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%H') }}"
     )
-    
-    # TAREFA 1: Limpa tabela de staging
-    task_clear_staging_table = PostgresOperator(
-        task_id="clear_staging_fact_table",
-        postgres_conn_id="postgres_default",
-        sql="""
-            TRUNCATE TABLE staging_fato_operacao_linhas_hora;
-        """,
-    )
 
-    # TAREFA 2: Rodar o Spark para popular a tabela de staging
-    task_spark_silver_to_gold  = DockerOperator(
+    # Executa todo o processo
+    submit_spark_job_docker  = DockerOperator(
         task_id="submit_silver_to_gold_spark_job",
         image="apache/spark:3.5.7-java17-python3",
         command=command,
@@ -54,47 +48,7 @@ with DAG(
                 target="/root/.ivy2",         # Pasta de cache do Ivy dentro do container
                 type="volume"
             )
-        ]
+        ],
+        retries=2,
+        retry_delay=timedelta(minutes=1)
     )
-
-    # TAREFA 3: Garantir que a tabela FATO final exista
-    task_create_fact_table = PostgresOperator(
-        task_id="create_fact_table",
-        postgres_conn_id="postgres_default",
-        sql="""
-            CREATE TABLE IF NOT EXISTS fato_operacao_linhas_hora (
-                id_tempo INTEGER,
-                id_linha BIGINT,
-                quantidade_onibus BIGINT,
-                PRIMARY KEY (id_tempo, id_linha)
-            );
-        """
-    )
-
-    # TAREFA 4: Apagar os dados da hora correspondente na tabela FATO
-    task_delete_from_fact = PostgresOperator(
-        task_id="delete_from_fact_table",
-        postgres_conn_id="postgres_default",
-        sql="""
-            DELETE FROM fato_operacao_linhas_hora
-            WHERE id_tempo IN (
-                SELECT id_tempo FROM dim_tempo
-                WHERE data_referencia = '{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y-%m-%d') }}'
-                  AND hora_referencia = {{ (data_interval_end - macros.timedelta(hours=1)).strftime('%H') | int }}
-            );
-        """,
-    )
-
-    # TAREFA 5: Inserir os novos dados da tabela de staging na FATO
-    task_insert_into_fact = PostgresOperator(
-        task_id="insert_into_fact_table",
-        postgres_conn_id="postgres_default",
-        sql="""
-            INSERT INTO fato_operacao_linhas_hora (id_tempo, id_linha, quantidade_onibus)
-            SELECT id_tempo, id_linha, quantidade_onibus
-            FROM staging_fato_operacao_linhas_hora;
-        """,
-    )
-
-    # Define a nova ordem de execução: Spark -> Create -> Delete -> Insert
-    task_clear_staging_table >> task_spark_silver_to_gold >> task_create_fact_table >> task_delete_from_fact >> task_insert_into_fact

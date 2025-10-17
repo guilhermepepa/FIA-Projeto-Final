@@ -16,7 +16,9 @@ with DAG(
     spark_command = (
         "/opt/spark/bin/spark-submit "
         "--master spark://spark-master:7077 "
-        "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0 "
+        "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0,io.delta:delta-spark_2.12:3.2.0 "
+        '--conf "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension" '
+        '--conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog" '
         "/opt/spark/apps/create_dim_linha.py"
     )
 

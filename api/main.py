@@ -21,7 +21,7 @@ def get_db_connection():
 app = FastAPI(
     title="Raio-X da Frota SPTrans API",
     description="Uma API que fornece insights operacionais e em tempo real sobre a frota de ônibus de São Paulo.",
-    version="1.0.0"
+    version="1.1.0"
 )
 
 # --- Modelos de Resposta (Pydantic) ---
@@ -54,14 +54,17 @@ def get_frota_ativa(conn=Depends(get_db_connection)):
     """Retorna o número total de ônibus em operação (com sinal nos últimos 5 minutos)."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
+            WITH latest_timestamp AS (
+                SELECT MAX(timestamp_captura) as max_ts_utc FROM fato_posicao_onibus_atual
+            )
             SELECT COUNT(prefixo_onibus) AS valor
             FROM fato_posicao_onibus_atual
-            WHERE timestamp_captura >= NOW() AT TIME ZONE 'UTC' - INTERVAL '5 minutes';
+            WHERE timestamp_captura >= ((SELECT max_ts_utc FROM latest_timestamp) - INTERVAL '4 minutes');
         """
         cur.execute(query)
         result = cur.fetchone()
         if not result:
-            raise HTTPException(status_code=404, detail="Dados não encontrados.")
+            return {"valor": 0}
         return result
 
 @app.get("/kpis/frota-congestionada", response_model=KpiResponse, tags=["KPIs (Near Real Time)"])
@@ -85,42 +88,26 @@ def get_velocidade_media(conn=Depends(get_db_connection)):
     """Retorna a tendência da velocidade média da frota (média móvel de 30 min)."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
-            WITH media_por_intervalo AS (
-              SELECT
-                date_trunc('hour', updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') +
-                floor(extract(minute from updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') / 10) * interval '10 minutes'
-                AS intervalo_de_10_minutos,
-                ROUND(AVG(velocidade_media_kph)::numeric, 2) AS velocidade_media_bruta
-              FROM
-                fato_velocidade_linha
-              WHERE
-                updated_at >= ((SELECT MAX(updated_at) FROM fato_velocidade_linha) - INTERVAL '1 hour')
-                AND velocidade_media_kph > 0
-              GROUP BY 1
-            ),
-            media_movel AS (
-              SELECT
-                intervalo_de_10_minutos,
-                ROUND(
-                  AVG(velocidade_media_bruta) OVER (
-                    ORDER BY intervalo_de_10_minutos
-                    ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
-                  )::numeric,
-                  2
-                ) AS tendencia
-              FROM
-                media_por_intervalo
+            WITH latest_time AS (
+              SELECT MAX(fvl.id_tempo) AS latest_id_tempo
+              FROM fato_velocidade_linha AS fvl
+              INNER JOIN fato_operacao_linhas_hora AS folh ON fvl.id_tempo = folh.id_tempo AND fvl.id_linha = folh.id_linha
             )
-            SELECT COALESCE(tendencia, 0.0) AS valor
-            FROM media_movel
-            ORDER BY intervalo_de_10_minutos DESC
-            LIMIT 1;
+            SELECT
+              COALESCE(
+                SUM(fvl.velocidade_media_kph * folh.quantidade_onibus)
+                / NULLIF(SUM(folh.quantidade_onibus), 0),
+                0.0
+              ) AS valor
+            FROM fato_velocidade_linha AS fvl
+            JOIN fato_operacao_linhas_hora AS folh ON fvl.id_tempo = folh.id_tempo AND fvl.id_linha = folh.id_linha
+            WHERE fvl.id_tempo = (SELECT latest_id_tempo FROM latest_time)
+              AND fvl.velocidade_media_kph > 0
+              AND folh.quantidade_onibus > 0;
         """
         cur.execute(query)
         result = cur.fetchone()
-        if not result:
-            return {"valor": 0.0}
-        return result
+        return result if result else {"valor": 0.0}
 
 @app.get("/rankings/linhas-mais-operantes", response_model=List[LinhaRankingQuantidade], tags=["Rankings Históricos (Batch)"])
 def get_top_linhas_operantes(conn=Depends(get_db_connection)):
@@ -174,6 +161,9 @@ def get_posicoes_ativas(conn=Depends(get_db_connection)):
     """Retorna a posição de todos os ônibus ativos nos últimos 5 minutos."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
+            WITH latest_timestamp AS (
+                SELECT MAX(timestamp_captura) as max_ts_utc FROM fato_posicao_onibus_atual
+            )
             SELECT
               prefixo_onibus,
               letreiro_linha,
@@ -181,12 +171,12 @@ def get_posicoes_ativas(conn=Depends(get_db_connection)):
               longitude,
               to_char((timestamp_captura AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD HH24:MI:SS') AS horario_local_captura
             FROM fato_posicao_onibus_atual
-            WHERE timestamp_captura >= NOW() AT TIME ZONE 'UTC' - INTERVAL '5 minutes';
+            WHERE timestamp_captura >= ((SELECT max_ts_utc FROM latest_timestamp) - INTERVAL '4 minutes');
         """
         cur.execute(query)
         result = cur.fetchall()
         if not result:
-            raise HTTPException(status_code=404, detail="Dados não encontrados.")
+            raise HTTPException(status_code=404, detail="Nenhum ônibus ativo encontrado.")
         return result
 
 @app.get("/posicoes/por-linha", response_model=List[PosicaoOnibus], tags=["Posições (Near Real Time)"])
@@ -194,6 +184,9 @@ def get_posicoes_por_linha(letreiro_linha: str, conn=Depends(get_db_connection))
     """Retorna a posição de todos os ônibus ativos de uma linha específica nos últimos 5 minutos."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
+            WITH latest_timestamp AS (
+                SELECT MAX(timestamp_captura) as max_ts_utc FROM fato_posicao_onibus_atual
+            )
             SELECT
               prefixo_onibus,
               letreiro_linha,
@@ -201,11 +194,11 @@ def get_posicoes_por_linha(letreiro_linha: str, conn=Depends(get_db_connection))
               longitude,
               to_char((timestamp_captura AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD HH24:MI:SS') AS horario_local_captura
             FROM fato_posicao_onibus_atual
-            WHERE timestamp_captura >= NOW() AT TIME ZONE 'UTC' - INTERVAL '5 minutes'
+            WHERE timestamp_captura >= ((SELECT max_ts_utc FROM latest_timestamp) - INTERVAL '4 minutes')
               AND letreiro_linha = %s;
         """
         cur.execute(query, (letreiro_linha,))
         result = cur.fetchall()
         if not result:
-            raise HTTPException(status_code=404, detail=f"Nenhum ônibus ativo encontrado para a linha {letreiro_linha} nos últimos 5 minutos.")
+            raise HTTPException(status_code=404, detail=f"Nenhum ônibus ativo encontrado para a linha {letreiro_linha}.")
         return result

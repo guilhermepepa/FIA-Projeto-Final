@@ -17,8 +17,10 @@ with DAG(
     command = (
         "/opt/spark/bin/spark-submit "
         "--master spark://spark-master:7077 "
-        "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262 "
-        "/opt/spark/apps/bronze_to_silver.py "
+        "--packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,io.delta:delta-spark_2.12:3.2.0 "
+        '--conf "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension" '
+        '--conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog" '
+        "/opt/spark/apps/bronze_to_silver_batch.py "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%Y') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%m') }} "
         "{{ (data_interval_end - macros.timedelta(hours=1)).strftime('%d') }} "
