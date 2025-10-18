@@ -17,8 +17,7 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 - **API:** FastAPI (http://localhost:8002)
   
 Visão geral:
-<img width="2043" height="816" alt="image" src="https://github.com/user-attachments/assets/19f462af-a323-4396-8e0f-e8779e7430e5" />
-
+<img width="2043" height="816" alt="image" src="https://github.com/user-attachments/assets/6323d5db-398c-4a8f-b6a9-cf5206f73a78" />
 
 
 
