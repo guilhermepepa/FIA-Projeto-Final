@@ -49,12 +49,14 @@ O projeto utiliza a Arquitetura Lakehouse Medalhão. A estrutura é dividida em 
 - **Camada Gold (Dados Agregados e de Negócio)**
 
   A Camada Gold é dividida em duas partes:
-    * Lakehouse (MinIO) - A Fonte da Verdade Agregada
+    * Lakehouse (MinIO) - Dados agregados
+      
       É aqui que os dados de negócio são consolidados e armazenados como Tabelas Delta Lake. Os pipelines Spark executam as operações de agregação e MERGE diretamente nestas tabelas.
-      - Tabelas Fato: fato_operacao_linhas_hora, fato_posicao_onibus_atual, fato_velocidade_linha e fato_onibus_parados_linha. Elas contêm os KPIs e métricas consolidadas, servindo como a fonte única da verdade para a camada de servir.
+      - Tabelas Fato: fato_operacao_linhas_hora, fato_posicao_onibus_atual, fato_velocidade_linha e fato_onibus_parados_linha. Elas contêm os KPIs e métricas consolidadas, servindo como a fonte única da verdade para camadas de baixa latência (atualmente o PostgreSQL, e para outras camadas que possam ser desenvolvidas.
 
     * Camada de Servir (PostgreSQL) - Otimizada para Consumo
-      Este é o nosso Data Warehouse, otimizado para consultas rápidas. As tabelas aqui são cópias dos dados da camada Gold do Lakehouse, carregadas ao final de cada pipeline para alimentar a API e os dashboards no Metabase com baixa latência.
+      
+      Este é o Data Warehouse, otimizado para consultas rápidas. As tabelas aqui são cópias dos dados da camada Gold do Lakehouse, carregadas ao final de cada pipeline para alimentar a API e os dashboards no Metabase com baixa latência.
       - Tabelas de Dimensão: dim_linha (descreve as linhas de ônibus) e dim_tempo (descreve cada hora de cada dia).
       - Tabelas Fato: Contêm as mesmas métricas das tabelas do Lakehouse, mas em um formato relacional para acesso rápido.
  
@@ -102,7 +104,7 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
 
 ## Dashboards
 - Batch
-  <img width="1844" height="377" alt="image" src="https://github.com/user-attachments/assets/0c13efad-0055-4867-9b5b-303be7f04ae6" />
+  <img width="1848" height="378" alt="image" src="https://github.com/user-attachments/assets/b705c401-524e-4af0-ad86-353d3af6d9bd" />
   <img width="1551" height="606" alt="image" src="https://github.com/user-attachments/assets/516103ef-f088-4386-8642-88bd84aa51a8" />
 
 - Near real time
