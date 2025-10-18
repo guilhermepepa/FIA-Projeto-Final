@@ -17,8 +17,7 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 - **API:** FastAPI (http://localhost:8002)
   
 Visão geral:
-<img width="2043" height="816" alt="image" src="https://github.com/user-attachments/assets/19f462af-a323-4396-8e0f-e8779e7430e5" />
-
+<img width="2043" height="816" alt="image" src="https://github.com/user-attachments/assets/02e94f9d-0991-4688-b62e-f0e9b1791887" />
 
 
 
@@ -35,13 +34,19 @@ O projeto utiliza a Arquitetura Lakehouse Medalhão. A estrutura é dividida em 
 
 - **Camada Silver (Dados Limpos)**
   
-    A Camada Silver transforma os dados brutos em um formato otimizado e confiável. Todos os dados aqui são armazenados como Tabelas Delta Lake, garantindo transações ACID e qualidade.
+    A Camada Silver transforma os dados brutos em um formato otimizado e confiável. Todos os dados aqui são armazenados como Tabelas Delta Lake no Minio, garantindo transações ACID e qualidade.
+  
     * Tabela posicoes_onibus (Batch)
+      
       Localização: s3a://silver/posicoes_onibus
+
       Conteúdo: Contém o histórico detalhado e "achatado" de todas as posições de ônibus. Os dados são limpos, com tipos corrigidos, e particionados por ano/mes/dia. É a fonte para o pipeline de lote (batch).
 
+
     * Tabela posicoes_onibus_streaming (Streaming)
+    
       Localização: s3a://silver/posicoes_onibus_streaming
+
       Conteúdo: Versão da tabela de posições otimizada para o fluxo de tempo real. Contém todos os campos necessários, incluindo dados de geolocalização (latitude/longitude), e é particionada por ano/mes/dia/hora para leituras incrementais com maior eficiência.
 
       <img width="587" height="349" alt="image" src="https://github.com/user-attachments/assets/853912c4-9fa5-4da6-a8c6-570268b9e68a" />
@@ -50,12 +55,17 @@ O projeto utiliza a Arquitetura Lakehouse Medalhão. A estrutura é dividida em 
 - **Camada Gold (Dados Agregados e de Negócio)**
 
   A Camada Gold é dividida em duas partes:
-    * Lakehouse (MinIO) - A Fonte da Verdade Agregada
+  
+    * Lakehouse (MinIO) - Dados agregados
+      
       É aqui que os dados de negócio são consolidados e armazenados como Tabelas Delta Lake. Os pipelines Spark executam as operações de agregação e MERGE diretamente nestas tabelas.
-      - Tabelas Fato: fato_operacao_linhas_hora, fato_posicao_onibus_atual, fato_velocidade_linha e fato_onibus_parados_linha. Elas contêm os KPIs e métricas consolidadas, servindo como a fonte única da verdade para a camada de servir.
+      
+      - Tabelas Fato: fato_operacao_linhas_hora, fato_posicao_onibus_atual, fato_velocidade_linha e fato_onibus_parados_linha. Elas contêm os KPIs e métricas consolidadas, servindo como a fonte única da verdade para camadas de baixa latência (atualmente o PostgreSQL, e para outras camadas que possam ser desenvolvidas.
 
-    * Camada de Servir (PostgreSQL) - Otimizada para Consumo
-      Este é o nosso Data Warehouse, otimizado para consultas rápidas. As tabelas aqui são cópias dos dados da camada Gold do Lakehouse, carregadas ao final de cada pipeline para alimentar a API e os dashboards no Metabase com baixa latência.
+
+    * Camada de Servir Dados (PostgreSQL) - Otimizada para Consumo
+      
+      Este é o Data Warehouse, otimizado para consultas rápidas. As tabelas aqui são cópias dos dados da camada Gold do Lakehouse, carregadas ao final de cada pipeline para alimentar a API e os dashboards no Metabase com baixa latência.
       - Tabelas de Dimensão: dim_linha (descreve as linhas de ônibus) e dim_tempo (descreve cada hora de cada dia).
       - Tabelas Fato: Contêm as mesmas métricas das tabelas do Lakehouse, mas em um formato relacional para acesso rápido.
  
@@ -67,21 +77,21 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
 
    - **Pipeline de Análise Histórica (Batch)**
 
-      Este pipeline é orquestrado pelo Airflow e roda de hora em hora para processar e consolidar os dados da hora anterior de forma definitiva.
+      Este pipeline é orquestrado pelo Airflow e roda de hora em hora para processar e consolidar os dados da hora anterior.
    
       * **1) Ingestão (API SPTrans -> Bronze):** Um processo no NiFi consulta a API /Posicoes a cada 2 minutos. A resposta JSON completa é salva no bucket bronze do MinIO, particionada por ano/mes/dia/hora. Esta camada serve como a fonte de dados imutável para o pipeline de lote.
    
-      * **2) Transformação (Bronze -> Silver):** A DAG bronze_to_silver aciona um job Spark (bronze_to_silver.py) que lê todos os JSONs da hora anterior na camada Bronze. O script "achata" a estrutura aninhada e salva os dados limpos como uma Tabela Delta Lake (posicoes_onibus) na camada Silver, particionada por ano/mes/dia
+      * **2) Transformação (Bronze -> Silver):** A DAG bronze_to_silver aciona um job Spark (bronze_to_silver_batch.py) que lê todos os JSONs da hora anterior na camada Bronze. O script "achata" a estrutura aninhada e salva os dados limpos como uma Tabela Delta Lake (posicoes_onibus) na camada Silver, particionada por ano/mes/dia
    
-      * **3) Agregação (Silver -> Gold):** A DAG silver_to_gold aciona um segundo job Spark (silver_to_gold.py):
+      * **3) Agregação (Silver -> Gold):** A DAG silver_to_gold aciona um segundo job Spark (silver_to_gold_batch.py):
 
           - a. Ele lê os dados da hora correspondente da tabela Delta na camada Silver.
   
-          - b. Calcula a contagem definitiva de ônibus únicos por linha.
+          - b. Calcula a contagem de ônibus únicos por linha.
   
-          - c. Usa o comando MERGE para atualizar (ou inserir) a contagem definitiva na tabela fato_operacao_linhas_hora na Camada Gold do Lakehouse (MinIO).
+          - c. Usa o comando MERGE para atualizar (ou inserir) a contagem na tabela fato_operacao_linhas_hora na Camada Gold do Lakehouse (MinIO).
   
-          - d. Carga para a Camada de Servir: Como passo final, o job lê a tabela fato_operacao_linhas_hora completa do Lakehouse e a sobrescreve na tabela correspondente no PostgreSQL, garantindo que os dashboards de BI tenham os dados históricos mais precisos.
+          - d. Como passo final, o job lê a tabela fato_operacao_linhas_hora do Lakehouse e a sobrescreve na tabela correspondente no PostgreSQL, garantindo que os dashboards de BI tenham os dados históricos precisos e alinhados com a camada gold do Lakehouse.
    
    - **Pipelines de Tempo Quase Real (Streaming)**
 
@@ -95,7 +105,7 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
           
           - b. Posição Atual: Atualiza a "memória" de posições, usando MERGE para fazer o UPSERT da última posição conhecida de cada ônibus na tabela fato_posicao_onibus_atual no Lakehouse (MinIO).
           
-          - c. Carga para a Camada de Servir: Ao final do lote, o job lê as tabelas de fatos recém-atualizadas do Lakehouse (fato_posicao_onibus_atual, fato_velocidade_linha, etc.) e as sobrescreve no PostgreSQL para consumo imediato pela API e pelos dashboards.
+          - c. Como passo final, o job lê as tabelas de fatos recém-atualizadas do Lakehouse (fato_posicao_onibus_atual, fato_velocidade_linha e fato_onibus_parados_linha) e as sobrescreve no PostgreSQL, disponibilizando para consumo imediato tanto pela API quanto para os Dashboards do Metabase.
 
 
 ## API
@@ -103,7 +113,7 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
 
 ## Dashboards
 - Batch
-  <img width="1844" height="377" alt="image" src="https://github.com/user-attachments/assets/0c13efad-0055-4867-9b5b-303be7f04ae6" />
+  <img width="1848" height="378" alt="image" src="https://github.com/user-attachments/assets/b705c401-524e-4af0-ad86-353d3af6d9bd" />
   <img width="1551" height="606" alt="image" src="https://github.com/user-attachments/assets/516103ef-f088-4386-8642-88bd84aa51a8" />
 
 - Near real time
