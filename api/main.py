@@ -69,7 +69,7 @@ def get_frota_ativa(conn=Depends(get_db_connection)):
 
 @app.get("/kpis/frota-congestionada", response_model=KpiResponse, tags=["KPIs (Near Real Time)"])
 def get_frota_congestionada(conn=Depends(get_db_connection)):
-    """Retorna o número total de ônibus considerados parados/congestionados na última hora processada."""
+    """Retorna o número total de ônibus considerados parados/congestionados."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
             WITH latest_time AS (
@@ -89,21 +89,41 @@ def get_velocidade_media(conn=Depends(get_db_connection)):
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
             WITH latest_time AS (
-              SELECT MAX(fvl.id_tempo) AS latest_id_tempo
-              FROM fato_velocidade_linha AS fvl
-              INNER JOIN fato_operacao_linhas_hora AS folh ON fvl.id_tempo = folh.id_tempo AND fvl.id_linha = folh.id_linha
+                SELECT MAX(id_tempo) as latest_id_tempo
+                FROM fato_velocidade_linha
+            ),
+            latest_kpi_timestamp AS (
+                SELECT MAX(updated_at) as max_ts_utc
+                FROM fato_velocidade_linha
+                WHERE id_tempo = (SELECT latest_id_tempo FROM latest_time)
+            ),
+            onibus_ativos_por_linha AS (
+                SELECT
+                    dl.id_linha,
+                    COUNT(fpoa.prefixo_onibus) AS quantidade_onibus
+                FROM
+                    fato_posicao_onibus_atual fpoa
+                JOIN dim_linha dl ON fpoa.letreiro_linha = dl.letreiro_linha
+                WHERE
+                    fpoa.timestamp_captura >= ((SELECT max_ts_utc FROM latest_kpi_timestamp) - INTERVAL '60 minutes')
+                GROUP BY
+                    dl.id_linha
             )
             SELECT
               COALESCE(
-                SUM(fvl.velocidade_media_kph * folh.quantidade_onibus)
-                / NULLIF(SUM(folh.quantidade_onibus), 0),
-                0.0
+                ROUND(
+                    (SUM(fvl.velocidade_media_kph * oa.quantidade_onibus)
+                    / NULLIF(SUM(oa.quantidade_onibus), 0))::numeric
+                , 2)
+                , 0.0
               ) AS valor
-            FROM fato_velocidade_linha AS fvl
-            JOIN fato_operacao_linhas_hora AS folh ON fvl.id_tempo = folh.id_tempo AND fvl.id_linha = folh.id_linha
-            WHERE fvl.id_tempo = (SELECT latest_id_tempo FROM latest_time)
+            FROM
+              fato_velocidade_linha AS fvl
+              JOIN onibus_ativos_por_linha AS oa ON fvl.id_linha = oa.id_linha
+            WHERE
+              fvl.id_tempo = (SELECT latest_id_tempo FROM latest_time)
               AND fvl.velocidade_media_kph > 0
-              AND folh.quantidade_onibus > 0;
+              AND oa.quantidade_onibus > 0;
         """
         cur.execute(query)
         result = cur.fetchone()
@@ -135,7 +155,7 @@ def get_top_linhas_operantes(conn=Depends(get_db_connection)):
 
 @app.get("/rankings/linhas-mais-lentas", response_model=List[LinhaRankingVelocidade], tags=["Rankings (Near Real Time)"])
 def get_top_linhas_lentas(conn=Depends(get_db_connection)):
-    """Retorna o ranking das 10 linhas mais lentas, com base na velocidade operacional da última hora processada."""
+    """Retorna o ranking das 10 linhas mais lentas, com base na velocidade operacional."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
             WITH latest_time AS (
@@ -194,7 +214,7 @@ def get_posicoes_por_linha(letreiro_linha: str, conn=Depends(get_db_connection))
               longitude,
               to_char((timestamp_captura AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD HH24:MI:SS') AS horario_local_captura
             FROM fato_posicao_onibus_atual
-            WHERE timestamp_captura >= ((SELECT max_ts_utc FROM latest_timestamp) - INTERVAL '4 minutes')
+            WHERE timestamp_captura >= ((SELECT max_ts_utc FROM latest_timestamp) - INTERVAL '5 minutes')
               AND letreiro_linha = %s;
         """
         cur.execute(query, (letreiro_linha,))

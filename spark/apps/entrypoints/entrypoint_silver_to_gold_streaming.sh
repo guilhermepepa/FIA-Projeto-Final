@@ -15,5 +15,6 @@ echo ">>> [STREAMING_PROCESSOR - SILVER TO GOLD]: Executando spark-submit..."
   --conf "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem" \
   --conf "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension" \
   --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog" \
-  --conf "spark.cores.max=10" \
+  --conf "spark.cores.max=8" \
+  --conf "spark.executor.memory=8g" \
   /opt/spark/apps/silver_to_gold_streaming.py
