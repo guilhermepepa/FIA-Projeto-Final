@@ -107,6 +107,6 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
   <img width="1551" height="606" alt="image" src="https://github.com/user-attachments/assets/516103ef-f088-4386-8642-88bd84aa51a8" />
 
 - Near real time
-  <img width="1848" height="837" alt="image" src="https://github.com/user-attachments/assets/ac993376-89b5-46d7-9d72-c3f2cf5eef62" />
+  <img width="1848" height="837" alt="image" src="https://github.com/user-attachments/assets/53b40168-b92f-4a74-96c5-a5b87dd86787" />
   <img width="1845" height="599" alt="image" src="https://github.com/user-attachments/assets/d3c86efd-dc59-424d-ae11-975b392549b4" />
   <img width="1847" height="602" alt="image" src="https://github.com/user-attachments/assets/e17b8971-e17f-4f52-a791-401307b625f4" />
