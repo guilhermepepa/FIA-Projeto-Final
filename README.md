@@ -60,7 +60,7 @@ O projeto utiliza a Arquitetura Lakehouse Medalhão. A estrutura é dividida em 
       
       É aqui que os dados de negócio são consolidados e armazenados como Tabelas Delta Lake. Os pipelines Spark executam as operações de agregação e MERGE diretamente nestas tabelas.
       
-      - Tabelas Fato: fato_operacao_linhas_hora, fato_posicao_onibus_atual, fato_velocidade_linha e fato_onibus_parados_linha. Elas contêm os KPIs e métricas consolidadas, servindo como a fonte única da verdade para camadas de baixa latência (atualmente o PostgreSQL, e para outras camadas que possam ser desenvolvidas.
+      - Tabelas Fato: fato_operacao_linhas_hora, fato_posicao_onibus_atual, fato_velocidade_linha e fato_onibus_parados_linha. Elas contêm os KPIs e métricas consolidadas, servindo como a fonte única da verdade para camadas de baixa latência (atualmente somente o PostgreSQL).
 
 
     * Camada de Servir Dados (PostgreSQL) - Otimizada para Consumo
