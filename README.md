@@ -16,8 +16,8 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 - **Visualização:** Metabase (http://localhost:3000)
 - **API:** FastAPI (http://localhost:8002)
   
-Visão geral:
-<img width="2080" height="789" alt="image" src="https://github.com/user-attachments/assets/065320fb-0f23-46b3-b139-c754893a5b20" />
+Desenho arquitetural:
+<img width="2189" height="789" alt="image" src="https://github.com/user-attachments/assets/efa1d9f9-f820-4897-b538-8ad228bc7208" />
 
 
 
