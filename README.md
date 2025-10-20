@@ -17,7 +17,7 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 - **API:** FastAPI (http://localhost:8002)
   
 Desenho arquitetural:
-<img width="2189" height="789" alt="image" src="https://github.com/user-attachments/assets/efa1d9f9-f820-4897-b538-8ad228bc7208" />
+<img width="2087" height="818" alt="image" src="https://github.com/user-attachments/assets/6c2d1574-b531-46e7-b2ea-bf40c459664b" />
 
 
 
@@ -79,7 +79,12 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
 
       Este pipeline é orquestrado pelo Airflow e roda de hora em hora para processar e consolidar os dados da hora anterior.
    
-      * **1) Ingestão (API SPTrans -> Bronze):** Um processo no NiFi consulta a API /Posicoes a cada 2 minutos. A resposta JSON completa é salva no bucket bronze do MinIO, particionada por ano/mes/dia/hora. Esta camada serve como a fonte de dados imutável para o pipeline de lote.
+      * **1) Ingestão (SPTrans -> Bronze):** Esta etapa é responsável por capturar os dados brutos e armazená-los em nossa camada inicial. O processo é orquestrado pelo Apache NiFi e lida com dois fluxos de dados distintos:
+        
+          - Dados de Posição (API): A cada 2 minutos, um process group do NiFi consulta a API /Posicoes da SPTrans. A resposta JSON completa é enviada simultaneamente para dois destinos: o bucket bronze do MinIO - particionado por ano/mes/dia/hora, e um tópico do Kafka - que será mencionando abaixo no fluxo do Pipeline de Streaming;
+            
+          - Dados Cadastrais (Arquivos GTFS): Diariamente, um segundo process group do NiFi copia os arquivos estáticos para uma pasta específica do bucke bronze (bronze/gtfs). Estes arquivos fornecem dados para o enriquecimento, como os novmes das linhas de ônibus, que serão usados nas camadas Silver e Gold.
+
    
       * **2) Transformação (Bronze -> Silver):** A DAG bronze_to_silver aciona um job Spark (bronze_to_silver_batch.py) que lê todos os JSONs da hora anterior na camada Bronze. O script "achata" a estrutura aninhada e salva os dados limpos como uma Tabela Delta Lake (posicoes_onibus) na camada Silver, particionada por ano/mes/dia
    
@@ -95,7 +100,7 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
    
    - **Pipelines de Tempo Quase Real (Streaming)**
 
-      * **1) Ingestão (API SPTrans -> Kafka):** O mesmo processo no NiFi que salva os dados no MinIO também envia, simultaneamente, cada resposta JSON para um tópico no Apache Kafka (sptrans_posicoes_raw), que atua como um buffer para o processamento em tempo real.
+      * **1) Ingestão (API SPTrans -> Kafka):** O mesmo processo no NiFi que salva os dados no bucket bronze do MinIO também envia, simultaneamente, cada resposta JSON para um tópico no Apache Kafka (sptrans_posicoes_raw), que atua como um buffer para o processamento em tempo real.
         
       * **2) Transformação (Kafka -> Silver Streaming):** Uma aplicação Spark Streaming (bronze_to_silver_streaming.py) consome as mensagens do Kafka. Ela "achata" a estrutura JSON e escreve os dados limpos em uma Tabela Delta Lake (posicoes_onibus_streaming) na camada Silver, otimizada para leituras incrementais.
    
