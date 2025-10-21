@@ -68,8 +68,8 @@ O projeto utiliza a Arquitetura Lakehouse Medalhão. A estrutura é dividida em 
       Este é o Data Warehouse, otimizado para consultas rápidas. As tabelas aqui são cópias dos dados da camada Gold do Lakehouse, carregadas ao final de cada pipeline para alimentar a API e os dashboards no Metabase com baixa latência.
       - Tabelas de Dimensão: dim_linha (descreve as linhas de ônibus) e dim_tempo (descreve cada hora de cada dia).
       - Tabelas Fato: Contêm as mesmas métricas das tabelas do Lakehouse, mas em um formato relacional para acesso rápido.
- 
-       <img width="691" height="519" alt="image" src="https://github.com/user-attachments/assets/ef9b22c5-49b1-4a59-981d-a16a55aa755a" />
+
+       <img width="1178" height="808" alt="image" src="https://github.com/user-attachments/assets/eb669be6-173f-46db-b1be-af5fa7a140d9" />
 
 
 ## Detalhamento dos Pipelines
