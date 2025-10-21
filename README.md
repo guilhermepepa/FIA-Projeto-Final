@@ -12,12 +12,10 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 - **Streaming:** Kafka
 - **Orquestração:** Airflow (http://localhost:8081/)
 - **Transformação:** PySpark (Batch e Streaming)
-- **Data Warehouse:** PostgreSQL 
-- **Visualização:** Metabase (http://localhost:3000)
-- **API:** FastAPI (http://localhost:8002)
+- **Camada de servir dados:** PostgreSQL, Metabase (http://localhost:3000) e FastAPI (http://localhost:8002)
   
-Desenho arquitetural:
-<img width="2087" height="818" alt="image" src="https://github.com/user-attachments/assets/6c2d1574-b531-46e7-b2ea-bf40c459664b" />
+Desenho da arquitetura:
+<img width="2126" height="818" alt="image" src="https://github.com/user-attachments/assets/b78a5c0d-87bd-49a3-87eb-67d32572c6b4" />
 
 
 
@@ -68,8 +66,8 @@ O projeto utiliza a Arquitetura Lakehouse Medalhão. A estrutura é dividida em 
       Este é o Data Warehouse, otimizado para consultas rápidas. As tabelas aqui são cópias dos dados da camada Gold do Lakehouse, carregadas ao final de cada pipeline para alimentar a API e os dashboards no Metabase com baixa latência.
       - Tabelas de Dimensão: dim_linha (descreve as linhas de ônibus) e dim_tempo (descreve cada hora de cada dia).
       - Tabelas Fato: Contêm as mesmas métricas das tabelas do Lakehouse, mas em um formato relacional para acesso rápido.
- 
-       <img width="691" height="519" alt="image" src="https://github.com/user-attachments/assets/ef9b22c5-49b1-4a59-981d-a16a55aa755a" />
+
+       <img width="1178" height="808" alt="image" src="https://github.com/user-attachments/assets/eb669be6-173f-46db-b1be-af5fa7a140d9" />
 
 
 ## Detalhamento dos Pipelines
