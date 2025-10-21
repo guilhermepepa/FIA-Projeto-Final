@@ -12,9 +12,7 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 - **Streaming:** Kafka
 - **Orquestração:** Airflow (http://localhost:8081/)
 - **Transformação:** PySpark (Batch e Streaming)
-- **Data Warehouse:** PostgreSQL 
-- **Visualização:** Metabase (http://localhost:3000)
-- **API:** FastAPI (http://localhost:8002)
+- **Camada de servir dados:** PostgreSQL, Metabase (http://localhost:3000) e FastAPI (http://localhost:8002)
   
 Desenho da arquitetura:
 <img width="2126" height="818" alt="image" src="https://github.com/user-attachments/assets/71a4ed4f-6385-41e7-9431-fe50970a2b23" />
