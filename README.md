@@ -15,7 +15,7 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 - **Camada de servir dados:** PostgreSQL, Metabase (http://localhost:3000) e FastAPI (http://localhost:8002)
   
 Desenho da arquitetura:
-<img width="2126" height="818" alt="image" src="https://github.com/user-attachments/assets/b78a5c0d-87bd-49a3-87eb-67d32572c6b4" />
+<img width="2147" height="818" alt="image" src="https://github.com/user-attachments/assets/9d2d1387-e2c4-4202-bf01-05e831ea2ee5" />
 
 
 
