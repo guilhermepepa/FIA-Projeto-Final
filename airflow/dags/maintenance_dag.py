@@ -47,7 +47,7 @@ with DAG(
         user='root',
         mounts=[
             Mount(
-                source="/c/Users/guilherme/Desktop/FIA/Docker/FIA-Projeto-Final/spark/apps",
+                source=host_spark_apps_path,
                 target="/opt/spark/apps",
                 type="bind",
             ),

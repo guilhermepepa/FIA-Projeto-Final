@@ -60,7 +60,7 @@ services:
       - sptrans-network
 
   postgres:
-    image: postgres:15
+    image: postgres:${POSTGRES_VERSION}
     container_name: postgres
     hostname: postgres
     ports:
@@ -76,7 +76,7 @@ services:
       - sptrans-network
 
   spark-master:
-    image: apache/spark:3.5.7-java17-python3
+    image: apache/spark:${SPARK_VERSION}
     container_name: spark-master
     hostname: spark-master
     user: root
@@ -90,7 +90,7 @@ services:
       - sptrans-network
 
   spark-worker:
-    image: apache/spark:3.5.7-java17-python3
+    image: apache/spark:${SPARK_VERSION}
     container_name: spark-worker
     depends_on:
       - spark-master
@@ -104,7 +104,7 @@ services:
       - sptrans-network
 
   spark-streaming-bronze-to-silver:
-    image: apache/spark:3.5.7-java17-python3
+    image: apache/spark:${SPARK_VERSION}
     container_name: spark-streaming-bronze-to-silver
     depends_on:
       - spark-master
@@ -121,7 +121,7 @@ services:
       - sptrans-network
 
   spark-streaming-silver-to-gold:
-    image: apache/spark:3.5.7-java17-python3
+    image: apache/spark:${SPARK_VERSION}
     container_name: spark-streaming-silver-to-gold
     depends_on:
       - spark-master
@@ -184,6 +184,7 @@ services:
       - _AIRFLOW_CONN_SPARK_DEFAULT=spark://spark-master:7077 
       - _PIP_ADDITIONAL_REQUIREMENTS=apache-airflow-providers-apache-spark pyspark apache-airflow-providers-docker
       - AIRFLOW_CONN_POSTGRES_DEFAULT=postgresql://admin:projetofinal@postgres:5432/sptrans_dw
+      - HOST_SPARK_APPS_DIR=${PWD}/spark/apps
 
     command: scheduler
     networks:
@@ -211,13 +212,14 @@ services:
       - _AIRFLOW_CONN_SPARK_DEFAULT=spark://spark-master:7077
       - _PIP_ADDITIONAL_REQUIREMENTS=apache-airflow-providers-apache-spark pyspark apache-airflow-providers-docker
       - AIRFLOW_CONN_POSTGRES_DEFAULT=postgresql://admin:projetofinal@postgres:5432/sptrans_dw
+      - HOST_SPARK_APPS_DIR=${PWD}/spark/apps
     command: webserver
     networks:
       - sptrans-network
 
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.3
+    image: confluentinc/cp-zookeeper:${KAFKA_VERSION}
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
@@ -226,7 +228,7 @@ services:
       - sptrans-network
 
   kafka:
-    image: confluentinc/cp-kafka:7.5.3
+    image: confluentinc/cp-kafka:${KAFKA_VERSION}
     container_name: kafka
     depends_on:
       - zookeeper
@@ -242,7 +244,7 @@ services:
       - sptrans-network
   
   kafka-setup:
-    image: confluentinc/cp-kafka:7.5.3
+    image: confluentinc/cp-kafka:${KAFKA_VERSION}
     container_name: kafka-setup
     depends_on:
       - kafka
@@ -261,7 +263,7 @@ services:
       - sptrans-network
 
   metabase:
-    image: metabase/metabase:latest
+    image: metabase/metabase:${METABASE_VERSION}
     container_name: metabase
     hostname: metabase
     ports:

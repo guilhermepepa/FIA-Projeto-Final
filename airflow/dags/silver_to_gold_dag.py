@@ -5,8 +5,11 @@ from airflow.providers.docker.operators.docker import DockerOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from docker.types import Mount
 from datetime import timedelta
+import os
 
 from datasets import silver_sptrans_posicoes
+
+host_spark_apps_path = os.environ.get("HOST_SPARK_APPS_DIR")
 
 with DAG(
     dag_id="silver_to_gold",
@@ -39,7 +42,7 @@ with DAG(
         user='root',
         mounts=[
             Mount(
-                source="/c/Users/guilherme/Desktop/FIA/Docker/FIA-Projeto-Final/spark/apps",
+                source=host_spark_apps_path,
                 target="/opt/spark/apps",
                 type="bind",
             ),

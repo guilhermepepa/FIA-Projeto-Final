@@ -5,6 +5,8 @@ from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
 import os
 
+host_spark_apps_path = os.environ.get("HOST_SPARK_APPS_DIR")
+
 with DAG(
     dag_id="create_dimensions",
     start_date=pendulum.datetime(2025, 9, 26, tz="America/Sao_Paulo"),
@@ -31,7 +33,7 @@ with DAG(
         user='root',
         mounts=[
             Mount(
-                source="/c/Users/guilherme/Desktop/FIA/Docker/FIA-Projeto-Final/spark/apps",
+                source=host_spark_apps_path,
                 target="/opt/spark/apps",
                 type="bind",
             ),

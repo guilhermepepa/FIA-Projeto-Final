@@ -3,8 +3,11 @@ import pendulum
 from airflow.models.dag import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
+import os
 
 from datasets import silver_sptrans_posicoes
+
+host_spark_apps_path = os.environ.get("HOST_SPARK_APPS_DIR")
 
 with DAG(
     dag_id="bronze_to_silver",
@@ -37,7 +40,7 @@ with DAG(
         mount_tmp_dir=False,
         mounts=[
             Mount(
-                source="/c/Users/guilherme/Desktop/FIA/Docker/FIA-Projeto-Final/spark/apps",
+                source=host_spark_apps_path,
                 target="/opt/spark/apps",
                 type="bind"
             ),
