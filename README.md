@@ -8,19 +8,21 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 ## Arquitetura
 
 - **Ingestão:** NiFi (https://127.0.0.1:9443/nifi)
-- **Data Lake:** MinIO (http://localhost:9001/)
+- **Data Lakehouse:** MinIO e Delta Lake (http://localhost:9001/)
 - **Streaming:** Kafka
 - **Orquestração:** Airflow (http://localhost:8081/)
 - **Transformação:** PySpark (Batch e Streaming)
-- **Camada de servir dados:** PostgreSQL, Metabase (http://localhost:3000) e FastAPI (http://localhost:8002)
+- **Camada de Entrega de Dados:** PostgreSQL, Metabase (http://localhost:3000) e FastAPI (http://localhost:8002)
   
-Desenho da arquitetura:
-<img width="2126" height="818" alt="image" src="https://github.com/user-attachments/assets/b78a5c0d-87bd-49a3-87eb-67d32572c6b4" />
+
+A solução implementa uma Arquitetura Lakehouse Medalhão que segue o padrão ELT (Extract, Load, Transform), projetada para fornecer tanto insights operacionais com baixa latência (streaming), quanto análises históricas (batch). 
+
+<img width="2147" height="818" alt="image" src="https://github.com/user-attachments/assets/9d2d1387-e2c4-4202-bf01-05e831ea2ee5" />
 
 
 
 ## Detalhamento das Camadas de Dados
-O projeto utiliza a Arquitetura Lakehouse Medalhão. A estrutura é dividida em três camadas principais:
+A estrutura é dividida em três camadas principais:
 - **Camada Bronze (Dados Brutos)**
   
     Esta camada funciona como o repositório de entrada para todos os dados em seu formato original, sem nenhuma limpeza ou transformação.
