@@ -16,7 +16,7 @@ with DAG(
     start_date=pendulum.datetime(2025, 9, 23, tz="America/Sao_Paulo"),
     schedule=[silver_sptrans_posicoes],
     catchup=False,
-    tags=["sptrans", "silver", "gold", "spark"],
+    tags=["sptrans", "silver", "gold", "spark", "batch"],
 ) as dag:
     
     command = (

@@ -3,7 +3,7 @@ CREATE DATABASE metabase_meta;
 
 \c sptrans_dw;
 
-CREATE TABLE fato_posicao_onibus_atual (
+CREATE TABLE nrt_posicao_onibus_atual (
     prefixo_onibus BIGINT PRIMARY KEY,
     letreiro_linha VARCHAR,
     codigo_linha BIGINT,
@@ -12,8 +12,8 @@ CREATE TABLE fato_posicao_onibus_atual (
     timestamp_captura TIMESTAMP
 );
 
-ALTER TABLE fato_posicao_onibus_atual
-ADD CONSTRAINT fato_posicao_onibus_atual_pkey PRIMARY KEY (prefixo_onibus);
+ALTER TABLE nrt_posicao_onibus_atual
+ADD CONSTRAINT nrt_posicao_onibus_atual_pkey PRIMARY KEY (prefixo_onibus);
 
 
 -- Cria a nova tabela de velocidade com as chaves de dimensão

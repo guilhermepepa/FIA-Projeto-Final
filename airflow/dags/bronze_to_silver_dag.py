@@ -14,7 +14,7 @@ with DAG(
     start_date=pendulum.datetime(2025, 9, 23, tz="America/Sao_Paulo"),
     schedule_interval="5 * * * *",
     catchup=False,
-    tags=["sptrans", "bronze", "silver", "spark"],
+    tags=["sptrans", "bronze", "silver", "spark", "batch"],
 ) as dag:
 
     command = (

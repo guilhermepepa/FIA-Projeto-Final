@@ -5,11 +5,11 @@ WITH onibus_ativos_por_linha AS (
     dl.id_linha,
     COUNT(fpoa.prefixo_onibus) AS quantidade_onibus
   FROM
-    fato_posicao_onibus_atual fpoa
+    nrt_posicao_onibus_atual fpoa
     JOIN dim_linha dl ON fpoa.letreiro_linha = dl.letreiro_linha
   WHERE
     -- Garante que estamos contando apenas ônibus que enviaram sinal recentemente
-    fpoa.timestamp_captura >= ((SELECT MAX(timestamp_captura) FROM fato_posicao_onibus_atual) - INTERVAL '4 minutes')
+    fpoa.timestamp_captura >= ((SELECT MAX(timestamp_captura) FROM nrt_posicao_onibus_atual) - INTERVAL '4 minutes')
   GROUP BY
     dl.id_linha
 )
@@ -34,3 +34,4 @@ WHERE
   -- Ignora linhas onde a velocidade ou a quantidade não são positivas
   fvl.velocidade_media_kph > 0
   AND oa.quantidade_onibus > 0;
+

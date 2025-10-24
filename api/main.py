@@ -55,10 +55,10 @@ def get_frota_ativa(conn=Depends(get_db_connection)):
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
             WITH latest_timestamp AS (
-                SELECT MAX(timestamp_captura) as max_ts_utc FROM fato_posicao_onibus_atual
+                SELECT MAX(timestamp_captura) as max_ts_utc FROM nrt_posicao_onibus_atual
             )
             SELECT COUNT(prefixo_onibus) AS valor
-            FROM fato_posicao_onibus_atual
+            FROM nrt_posicao_onibus_atual
             WHERE timestamp_captura >= ((SELECT max_ts_utc FROM latest_timestamp) - INTERVAL '4 minutes');
         """
         cur.execute(query)
@@ -90,10 +90,10 @@ def get_velocidade_media(conn=Depends(get_db_connection)):
                 dl.id_linha,
                 COUNT(fpoa.prefixo_onibus) AS quantidade_onibus
               FROM
-                fato_posicao_onibus_atual fpoa
+                nrt_posicao_onibus_atual fpoa
                 JOIN dim_linha dl ON fpoa.letreiro_linha = dl.letreiro_linha
               WHERE
-                fpoa.timestamp_captura >= ((SELECT MAX(timestamp_captura) FROM fato_posicao_onibus_atual) - INTERVAL '4 minutes')
+                fpoa.timestamp_captura >= ((SELECT MAX(timestamp_captura) FROM nrt_posicao_onibus_atual) - INTERVAL '4 minutes')
               GROUP BY
                 dl.id_linha
             )
@@ -168,7 +168,7 @@ def get_posicoes_ativas(conn=Depends(get_db_connection)):
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
             WITH latest_timestamp AS (
-                SELECT MAX(timestamp_captura) as max_ts_utc FROM fato_posicao_onibus_atual
+                SELECT MAX(timestamp_captura) as max_ts_utc FROM nrt_posicao_onibus_atual
             )
             SELECT
               prefixo_onibus,
@@ -176,7 +176,7 @@ def get_posicoes_ativas(conn=Depends(get_db_connection)):
               latitude,
               longitude,
               to_char((timestamp_captura AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD HH24:MI:SS') AS horario_local_captura
-            FROM fato_posicao_onibus_atual
+            FROM nrt_posicao_onibus_atual
             WHERE timestamp_captura >= ((SELECT max_ts_utc FROM latest_timestamp) - INTERVAL '4 minutes');
         """
         cur.execute(query)
@@ -191,7 +191,7 @@ def get_posicoes_por_linha(letreiro_linha: str, conn=Depends(get_db_connection))
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         query = """
             WITH latest_timestamp AS (
-                SELECT MAX(timestamp_captura) as max_ts_utc FROM fato_posicao_onibus_atual
+                SELECT MAX(timestamp_captura) as max_ts_utc FROM nrt_posicao_onibus_atual
             )
             SELECT
               prefixo_onibus,
@@ -199,7 +199,7 @@ def get_posicoes_por_linha(letreiro_linha: str, conn=Depends(get_db_connection))
               latitude,
               longitude,
               to_char((timestamp_captura AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'YYYY-MM-DD HH24:MI:SS') AS horario_local_captura
-            FROM fato_posicao_onibus_atual
+            FROM nrt_posicao_onibus_atual
             WHERE timestamp_captura >= ((SELECT max_ts_utc FROM latest_timestamp) - INTERVAL '5 minutes')
               AND letreiro_linha = %s;
         """

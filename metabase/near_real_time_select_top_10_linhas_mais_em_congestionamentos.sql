@@ -1,6 +1,6 @@
 SELECT
   (dl.letreiro_linha || ' - ' || dl.nome_linha) AS "Linha",
-  fop.quantidade_onibus_parados AS "Total de Ônibus Parados"
+  fop.quantidade_onibus_parados AS "Total de Ônibus"
 FROM
   -- Lê da tabela NRT, que não possui 'id_tempo'
   nrt_onibus_parados_linha AS fop
