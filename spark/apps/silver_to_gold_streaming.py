@@ -170,15 +170,15 @@ def process_silver_to_gold(df_micro_batch, epoch_id):
         if id_tempo:
             now_ts = current_timestamp()
             if not df_speed_with_id.isEmpty():
-                df_speed_final = df_speed_with_id.withColumn("id_tempo", lit(id_tempo)).withColumn("updated_at", now_ts)
-                DeltaTable.createIfNotExists(spark).location(gold_path_velocidade).addColumns(df_speed_final.schema).execute()
-                DeltaTable.forPath(spark, gold_path_velocidade).alias("gold").merge(df_speed_final.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha").whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+                #df_speed_final = df_speed_with_id.withColumn("id_tempo", lit(id_tempo)).withColumn("updated_at", now_ts)
+                #DeltaTable.createIfNotExists(spark).location(gold_path_velocidade).addColumns(df_speed_final.schema).execute()
+                #DeltaTable.forPath(spark, gold_path_velocidade).alias("gold").merge(df_speed_final.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha").whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
                 log_info("MERGE para 'fato_velocidade_linha' no Delta Lake concluído.")
             
             if not df_stopped_with_id.isEmpty():
-                df_stopped_final = df_stopped_with_id.withColumn("id_tempo", lit(id_tempo)).withColumn("updated_at", now_ts)
-                DeltaTable.createIfNotExists(spark).location(gold_path_parados).addColumns(df_stopped_final.schema).execute()
-                DeltaTable.forPath(spark, gold_path_parados).alias("gold").merge(df_stopped_final.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha").whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+                #df_stopped_final = df_stopped_with_id.withColumn("id_tempo", lit(id_tempo)).withColumn("updated_at", now_ts)
+                #DeltaTable.createIfNotExists(spark).location(gold_path_parados).addColumns(df_stopped_final.schema).execute()
+                #DeltaTable.forPath(spark, gold_path_parados).alias("gold").merge(df_stopped_final.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha").whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
                 log_info("MERGE para 'fato_onibus_parados_linha' no Delta Lake concluído.")
     except Exception as e:
         log_info(f"Não foi possível calcular KPIs. Erro: {e}")
