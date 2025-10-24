@@ -17,7 +17,7 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 
 A solução implementa uma Arquitetura Lakehouse Medalhão que segue o padrão ELT (Extract, Load, Transform), projetada para fornecer tanto insights operacionais com baixa latência (streaming), quanto análises históricas (batch). 
 
-<img width="2147" height="818" alt="image" src="https://github.com/user-attachments/assets/9d2d1387-e2c4-4202-bf01-05e831ea2ee5" />
+<img width="2147" height="818" alt="image" src="https://github.com/user-attachments/assets/9c21a692-b4f5-4400-ae1d-eef7851555b5" />
 
 
 
@@ -70,7 +70,8 @@ A estrutura é dividida em três camadas principais:
       - Tabelas Fato: Contêm as mesmas métricas das tabelas do Lakehouse com a adição da tabela fato_posicao_onibus_atual, mas em um formato relacional para acesso rápido.
       - Tableas NRT: São tabelas otimizadas para os dashboards NRT, sem o id_tempo.
 
-       <img width="1197" height="736" alt="image" src="https://github.com/user-attachments/assets/507d8a50-521d-4591-8a82-ac9fe81b5131" />
+       <img width="816" height="880" alt="image" src="https://github.com/user-attachments/assets/b809eab9-d06e-4344-bc87-f7501cd3b8b7" />
+
 
 
 ## Detalhamento dos Pipelines
@@ -123,6 +124,6 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
   <img width="1551" height="606" alt="image" src="https://github.com/user-attachments/assets/516103ef-f088-4386-8642-88bd84aa51a8" />
 
 - Near real time
-  <img width="1860" height="820" alt="image" src="https://github.com/user-attachments/assets/45e3056e-29f8-4d70-9c84-b7682d479de7" />
+  <img width="1852" height="747" alt="image" src="https://github.com/user-attachments/assets/25c3e2fb-a0c2-4bb5-86af-bc4870ed3237" />
   <img width="1845" height="599" alt="image" src="https://github.com/user-attachments/assets/d3c86efd-dc59-424d-ae11-975b392549b4" />
   <img width="1847" height="602" alt="image" src="https://github.com/user-attachments/assets/e17b8971-e17f-4f52-a791-401307b625f4" />
