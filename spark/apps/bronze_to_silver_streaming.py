@@ -99,7 +99,7 @@ def main():
         .foreachBatch(process_and_log_batch) \
         .outputMode("append") \
         .option("checkpointLocation", "/tmp/spark_checkpoints/bronze_to_silver") \
-        .trigger(processingTime='2 minutes') \
+        .trigger(processingTime='1 minutes') \
         .start()
         
     query.awaitTermination()

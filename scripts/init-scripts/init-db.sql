@@ -12,6 +12,10 @@ CREATE TABLE fato_posicao_onibus_atual (
     timestamp_captura TIMESTAMP
 );
 
+ALTER TABLE fato_posicao_onibus_atual
+ADD CONSTRAINT fato_posicao_onibus_atual_pkey PRIMARY KEY (prefixo_onibus);
+
+
 -- Cria a nova tabela de velocidade com as chaves de dimensão
 CREATE TABLE fato_velocidade_linha (
     id_tempo INTEGER,
@@ -30,6 +34,7 @@ CREATE TABLE fato_onibus_parados_linha (
     PRIMARY KEY (id_tempo, id_linha)
 );
 
+
 CREATE TABLE dim_tempo (
     id_tempo SERIAL PRIMARY KEY,
     data_referencia DATE NOT NULL,
@@ -41,6 +46,28 @@ CREATE TABLE dim_tempo (
     fim_de_semana BOOLEAN NOT NULL,
     periodo_do_dia VARCHAR(20) NOT NULL,
     UNIQUE(data_referencia, hora_referencia)
+);
+
+CREATE TABLE IF NOT EXISTS nrt_velocidade_linha (
+    id_linha BIGINT NOT NULL PRIMARY KEY,
+    velocidade_media_kph DOUBLE PRECISION,
+    FOREIGN KEY (id_linha) REFERENCES dim_linha(id_linha)
+);
+
+CREATE TABLE IF NOT EXISTS nrt_onibus_parados_linha (
+    id_linha BIGINT NOT NULL PRIMARY KEY,
+    quantidade_onibus_parados INTEGER,
+    FOREIGN KEY (id_linha) REFERENCES dim_linha(id_linha)
+);
+
+CREATE TABLE IF NOT EXISTS staging_nrt_velocidade_linha (
+    id_linha BIGINT,
+    velocidade_media_kph DOUBLE PRECISION
+);
+
+CREATE TABLE IF NOT EXISTS staging_nrt_onibus_parados_linha (
+    id_linha BIGINT,
+    quantidade_onibus_parados INTEGER
 );
 
 INSERT INTO dim_tempo (data_referencia, hora_referencia, ano, mes, dia, dia_da_semana, fim_de_semana, periodo_do_dia)

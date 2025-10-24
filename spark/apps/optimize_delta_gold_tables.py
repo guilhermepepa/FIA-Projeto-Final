@@ -16,7 +16,6 @@ def main():
 
     # --- Lista de tabelas Gold a serem otimizadas ---
     gold_tables = {
-        "fato_posicao_onibus_atual": "prefixo_onibus",
         "fato_operacao_linhas_hora": "id_tempo, id_linha",
         "fato_velocidade_linha": "id_tempo, id_linha",
         "fato_onibus_parados_linha": "id_tempo, id_linha"
@@ -30,7 +29,6 @@ def main():
             if DeltaTable.isDeltaTable(spark, table_path):
                 delta_table = DeltaTable.forPath(spark, table_path)
                 
-                # --- CORREÇÃO AQUI ---
                 # 1. Converte a string de colunas em uma lista
                 zorder_cols_list = [col.strip() for col in zorder_cols_str.split(',')]
                 
