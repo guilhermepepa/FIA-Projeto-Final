@@ -17,7 +17,7 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 
 A solução implementa uma Arquitetura Lakehouse Medalhão que segue o padrão ELT (Extract, Load, Transform), projetada para fornecer tanto insights operacionais com baixa latência (streaming), quanto análises históricas (batch). 
 
-<img width="2147" height="818" alt="image" src="https://github.com/user-attachments/assets/9d2d1387-e2c4-4202-bf01-05e831ea2ee5" />
+<img width="2147" height="818" alt="image" src="https://github.com/user-attachments/assets/9c21a692-b4f5-4400-ae1d-eef7851555b5" />
 
 
 
@@ -40,16 +40,21 @@ A estrutura é dividida em três camadas principais:
       
       Localização: s3a://silver/posicoes_onibus
 
-      Conteúdo: Contém o histórico detalhado e "achatado" de todas as posições de ônibus. Os dados são limpos, com tipos corrigidos, e particionados por ano/mes/dia. É a fonte para o pipeline de lote (batch).
+      Conteúdo: Contém o histórico detalhado e "achatado" (flat) de todas as posições de ônibus. Os dados são limpos, com tipos corrigidos, e particionados por ano/mes/dia. É a fonte para o pipeline de lote (batch) da Camada Gold.
 
 
     * Tabela posicoes_onibus_streaming (Streaming)
     
       Localização: s3a://silver/posicoes_onibus_streaming
 
-      Conteúdo: Versão da tabela de posições otimizada para o fluxo de tempo real. Contém todos os campos necessários, incluindo dados de geolocalização (latitude/longitude), e é particionada por ano/mes/dia/hora para leituras incrementais com maior eficiência.
+      Conteúdo: Versão da tabela de posições otimizada para o fluxo de tempo real. Contém todos os campos necessários, incluindo dados de geolocalização (latitude/longitude), e é particionada por ano/mes/dia/hora para leituras incrementais.
 
-      <img width="587" height="349" alt="image" src="https://github.com/user-attachments/assets/853912c4-9fa5-4da6-a8c6-570268b9e68a" />
+
+    * Tabela posicoes_onibus_streaming (Streaming)
+    
+      Localização: s3a://silver/kpis_historicos_para_processar
+
+      Conteúdo: Tabela intermediária que armazena os KPIs (velocidade, ônibus parados) calculados pelo pipeline de streaming. Ela funciona como uma "fila" para ser consumida de forma assíncrona pelo pipeline de lote (batch) da Camada Gold.
 
 
 - **Camada Gold (Dados Agregados e de Negócio)**
@@ -63,14 +68,20 @@ A estrutura é dividida em três camadas principais:
       - Tabelas Fato: fato_operacao_linhas_hora, fato_velocidade_linha e fato_onibus_parados_linha. Elas contêm os KPIs e métricas consolidadas, servindo como a fonte única da verdade para camadas de baixa latência (atualmente somente o PostgreSQL).
 
 
-    * Camada de Servir Dados (PostgreSQL) - Otimizada para Consumo
+    * Camada de Entrega de Dados (PostgreSQL) - Otimizada para Consumo
       
       Este é o Data Warehouse, otimizado para consultas rápidas. As tabelas aqui são cópias dos dados da camada Gold do Lakehouse, carregadas ao final de cada pipeline para alimentar a API e os dashboards no Metabase com baixa latência.
       - Tabelas de Dimensão: dim_linha (descreve as linhas de ônibus) e dim_tempo (descreve cada hora de cada dia).
-      - Tabelas Fato: Contêm as mesmas métricas das tabelas do Lakehouse com a adição da tabela fato_posicao_onibus_atual, mas em um formato relacional para acesso rápido.
-      - Tableas NRT: São tabelas otimizadas para os dashboards NRT, sem o id_tempo.
+      - Tabelas de Estado e NRT (Near Real-Time): Alimentadas diretamente pelo pipeline de streaming para dashboards em tempo real.
+        
+          * nrt_posicao_onibus_atual: Tabela de estado com a última posição de cada ônibus (PK: prefixo_onibus).
+            
+          * nrt_velocidade_linha / nrt_onibus_parados_linha: Snapshots dos KPIs mais recentes, sobrescritos a cada 2 minutos.
+            
+      - Tabelas de Fato Históricas (Cópia): Cópias das tabelas do Lakehouse (fato_operacao_linhas_hora, etc.), carregadas ao final de cada pipeline de lote para consultas analíticas rápidas.
 
-       <img width="1197" height="736" alt="image" src="https://github.com/user-attachments/assets/507d8a50-521d-4591-8a82-ac9fe81b5131" />
+       <img width="816" height="880" alt="image" src="https://github.com/user-attachments/assets/b809eab9-d06e-4344-bc87-f7501cd3b8b7" />
+
 
 
 ## Detalhamento dos Pipelines
@@ -91,13 +102,11 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
    
       * **3) Agregação (Silver -> Gold):** A DAG silver_to_gold aciona um segundo job Spark (silver_to_gold_batch.py):
 
-          - a. Ele lê os dados da hora correspondente da tabela Delta na camada Silver.
-  
-          - b. Calcula a contagem de ônibus únicos por linha.
-  
-          - c. Usa o comando MERGE para atualizar (ou inserir) a contagem na tabela fato_operacao_linhas_hora na Camada Gold do Lakehouse (MinIO).
-  
-          - d. Como passo final, o job lê a tabela fato_operacao_linhas_hora do Lakehouse e a sobrescreve na tabela correspondente no PostgreSQL, garantindo que os dashboards de BI tenham os dados históricos precisos e alinhados com a camada gold do Lakehouse.
+          - a. (Tarefa 1 - Operação): Lê os dados da hora da tabela posicoes_onibus (Silver), calcula a contagem de ônibus únicos e usa MERGE para atualizar a tabela fato_operacao_linhas_hora na Camada Gold do Lakehouse (MinIO).
+
+          - b. (Tarefa 2 - KPIs): Lê e processa os dados da tabela de buffer kpis_historicos_para_processar (Silver), agregando e usando MERGE para atualizar as tabelas fato_velocidade_linha e fato_onibus_parados_linha na Camada Gold do     Lakehouse (MinIO).
+
+          - c. (Passo Final): Como passo final, o job lê as tabelas de fatos atualizadas do Lakehouse (todas as três) e as sobrescreve no PostgreSQL, garantindo que os dashboards de BI tenham os dados históricos precisos.
    
    - **Pipelines de Tempo Quase Real (Streaming)**
 
@@ -105,13 +114,13 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
         
       * **2) Transformação (Kafka -> Silver Streaming):** Uma aplicação Spark Streaming (bronze_to_silver_streaming.py) consome as mensagens do Kafka. Ela "achata" a estrutura JSON e escreve os dados limpos em uma Tabela Delta Lake (posicoes_onibus_streaming) na camada Silver, otimizada para leituras incrementais.
    
-      * **3) Agregação e Atualização (Silver Streaming -> Gold):** Uma segunda aplicação Spark Streaming (silver_to_gold_streaming.py) lê os novos dados da tabela Delta de streaming e executa várias tarefas em cada micro-lote:
-    
-          - a. KPIs Operacionais: Usa a tabela fato_posicao_onibus_atual como "memória" para calcular a velocidade e identificar ônibus parados. Em seguida, usa MERGE para atualizar as tabelas fato_velocidade_linha e fato_onibus_parados_linha na Camada Gold do Lakehouse (MinIO).
+      * **3) Agregação e Atualização (Silver Streaming -> Gold):** Uma segunda aplicação Spark Streaming (silver_to_gold_nrt_streaming.py) lê os novos dados da tabela Delta de streaming e executa várias tarefas em cada micro-lote:
+
+          - a. Atualização de Estado (PostgreSQL): Usa UPSERT (INSERT ... ON CONFLICT) para atualizar a tabela nrt_posicao_onibus_atual no PostgreSQL. Esta tabela serve como a "memória" de estado para os cálculos.
           
-          - b. Atualização de Posições: Após os cálculos de KPI serem concluídos, O script envia a última posição conhecida de cada ônibus diretamente para o PostgreSQL, usando uma função UPSERT (INSERT ... ON CONFLICT) otimizada.
+          - b. Cálculo e Entrega de KPIs NRT (PostgreSQL): Usa a "memória" para calcular a velocidade e os ônibus parados. Em seguida, escreve (TRUNCATE + INSERT) esses KPIs diretamente nas tabelas nrt_velocidade_linha e nrt_onibus_parados_linha no PostgreSQL para alimentar os dashboards.
           
-          - c. Como passo final, o job lê as tabelas de fatos recém-atualizadas do Lakehouse (fato_velocidade_linha e fato_onibus_parados_linha) e as sobrescreve no PostgreSQL, disponibilizando para consumo imediato tanto pela API quanto para os Dashboards do Metabase.
+          - c. Fila para o Histórico (Lakehouse Silver): Os mesmos KPIs calculados são também anexados (appended) à tabela kpis_historicos_para_processar (Delta Lake) na Camada Silver, servindo como uma fila para o pipeline de lote (batch).
 
 
 ## API
@@ -123,6 +132,6 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
   <img width="1551" height="606" alt="image" src="https://github.com/user-attachments/assets/516103ef-f088-4386-8642-88bd84aa51a8" />
 
 - Near real time
-  <img width="1860" height="820" alt="image" src="https://github.com/user-attachments/assets/45e3056e-29f8-4d70-9c84-b7682d479de7" />
+  <img width="1852" height="747" alt="image" src="https://github.com/user-attachments/assets/25c3e2fb-a0c2-4bb5-86af-bc4870ed3237" />
   <img width="1845" height="599" alt="image" src="https://github.com/user-attachments/assets/d3c86efd-dc59-424d-ae11-975b392549b4" />
   <img width="1847" height="602" alt="image" src="https://github.com/user-attachments/assets/e17b8971-e17f-4f52-a791-401307b625f4" />
