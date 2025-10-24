@@ -60,14 +60,14 @@ A estrutura é dividida em três camadas principais:
       
       É aqui que os dados de negócio são consolidados e armazenados como Tabelas Delta Lake. Os pipelines Spark executam as operações de agregação e MERGE diretamente nestas tabelas.
       
-      - Tabelas Fato: fato_operacao_linhas_hora, fato_posicao_onibus_atual, fato_velocidade_linha e fato_onibus_parados_linha. Elas contêm os KPIs e métricas consolidadas, servindo como a fonte única da verdade para camadas de baixa latência (atualmente somente o PostgreSQL).
+      - Tabelas Fato: fato_operacao_linhas_hora, fato_velocidade_linha e fato_onibus_parados_linha. Elas contêm os KPIs e métricas consolidadas, servindo como a fonte única da verdade para camadas de baixa latência (atualmente somente o PostgreSQL).
 
 
     * Camada de Servir Dados (PostgreSQL) - Otimizada para Consumo
       
       Este é o Data Warehouse, otimizado para consultas rápidas. As tabelas aqui são cópias dos dados da camada Gold do Lakehouse, carregadas ao final de cada pipeline para alimentar a API e os dashboards no Metabase com baixa latência.
       - Tabelas de Dimensão: dim_linha (descreve as linhas de ônibus) e dim_tempo (descreve cada hora de cada dia).
-      - Tabelas Fato: Contêm as mesmas métricas das tabelas do Lakehouse, mas em um formato relacional para acesso rápido.
+      - Tabelas Fato: Contêm as mesmas métricas das tabelas do Lakehouse com a adição da tabela fato_posicao_onibus_atual, mas em um formato relacional para acesso rápido.
 
        <img width="1178" height="808" alt="image" src="https://github.com/user-attachments/assets/eb669be6-173f-46db-b1be-af5fa7a140d9" />
 
@@ -108,9 +108,9 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
     
           - a. KPIs Operacionais: Usa a tabela fato_posicao_onibus_atual como "memória" para calcular a velocidade e identificar ônibus parados. Em seguida, usa MERGE para atualizar as tabelas fato_velocidade_linha e fato_onibus_parados_linha na Camada Gold do Lakehouse (MinIO).
           
-          - b. Posição Atual: Atualiza a "memória" de posições, usando MERGE para fazer o UPSERT da última posição conhecida de cada ônibus na tabela fato_posicao_onibus_atual no Lakehouse (MinIO).
+          - b. Atualização de Posições: Após os cálculos de KPI serem concluídos, O script envia a última posição conhecida de cada ônibus diretamente para o PostgreSQL, usando uma função UPSERT (INSERT ... ON CONFLICT) otimizada.
           
-          - c. Como passo final, o job lê as tabelas de fatos recém-atualizadas do Lakehouse (fato_posicao_onibus_atual, fato_velocidade_linha e fato_onibus_parados_linha) e as sobrescreve no PostgreSQL, disponibilizando para consumo imediato tanto pela API quanto para os Dashboards do Metabase.
+          - c. Como passo final, o job lê as tabelas de fatos recém-atualizadas do Lakehouse (fato_velocidade_linha e fato_onibus_parados_linha) e as sobrescreve no PostgreSQL, disponibilizando para consumo imediato tanto pela API quanto para os Dashboards do Metabase.
 
 
 ## API
