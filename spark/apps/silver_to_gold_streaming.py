@@ -144,8 +144,9 @@ def process_silver_to_gold(df_micro_batch, epoch_id):
             .filter(col("velocidade_kph") < 80) \
             .withColumn("esta_parado", 
                 when(
-                    (col("velocidade_kph") < 2.0) &
-                    (col("periodo_do_dia") != "Madrugada"),
+                    # A regra "não é madrugada" (01:00-04:00 BRT) é aplicada sobre a hora UTC (04:00-07:00 UTC).
+                    ( (col("hora_referencia") < 4) | (col("hora_referencia") > 7) ) &
+                    (col("velocidade_kph") < 2.0),
                     1
                 ).otherwise(0)
                 )
