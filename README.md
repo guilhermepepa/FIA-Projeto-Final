@@ -17,7 +17,7 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 
 A solução implementa uma Arquitetura Lakehouse Medalhão que segue o padrão ELT (Extract, Load, Transform), projetada para fornecer tanto insights operacionais com baixa latência (streaming), quanto análises históricas (batch). 
 
-<img width="2147" height="818" alt="image" src="https://github.com/user-attachments/assets/9c21a692-b4f5-4400-ae1d-eef7851555b5" />
+<img width="2147" height="818" alt="image" src="https://github.com/user-attachments/assets/2a8b216c-5414-4bc3-be37-f5bab9007822" />
 
 
 
