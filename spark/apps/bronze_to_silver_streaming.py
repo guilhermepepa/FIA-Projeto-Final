@@ -46,7 +46,7 @@ def main():
 
     log_info("Processador de streaming Bronze-para-Silver iniciado.")
 
-    # Schema completo do JSON da API (sem alterações)
+    # Schema completo do JSON da API
     schema_veiculo = StructType([
         StructField("p", LongType(), True), StructField("a", BooleanType(), True),
         StructField("ta", StringType(), True), StructField("py", DoubleType(), True),
@@ -64,7 +64,8 @@ def main():
         StructField("l", ArrayType(schema_linha), True)
     ])
 
-    # Leitura do Kafka e transformações (sem alterações)
+    # Leitura do Kafka e transformações
+    # Para testes de desenvolvimento pegando apenas a partir dos eventos mais novos
     df_kafka = spark.readStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers", "kafka:9092") \

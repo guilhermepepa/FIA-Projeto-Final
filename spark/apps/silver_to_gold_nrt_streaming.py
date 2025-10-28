@@ -178,8 +178,16 @@ def process_silver_to_postgres(df_micro_batch, epoch_id):
     
     # --- TAREFA 2: ATUALIZAR 'MEMÓRIA' DE POSIÇÕES ATUAIS (POSTGRES) ---
     log_info("Iniciando Tarefa 2: Atualização da 'memória' de posições atuais no PostgreSQL.")
+    
+    # Organiza dados recebidos. Cria baldes para cada prefixo de onibus, e dentro de cada balde ordenar do mais novo para o mais antigo
     windowSpecPos = Window.partitionBy("prefixo_onibus").orderBy(col("timestamp_captura").desc())
-    df_latest_positions = df_micro_batch.withColumn("rank", row_number().over(windowSpecPos)).filter(col("rank") == 1).select("prefixo_onibus", "letreiro_linha", "codigo_linha", "latitude", "longitude", "timestamp_captura").cache()
+
+    # Classifica por ranking, o que importa é a posicao 1 (mais recente)
+    df_latest_positions = df_micro_batch \
+        .withColumn("rank", row_number().over(windowSpecPos)) \
+        .filter(col("rank") == 1) \
+        .select("prefixo_onibus", "letreiro_linha", "codigo_linha", "latitude", "longitude", "timestamp_captura").cache()
+    
     upsert_postgres(df_latest_positions, 'nrt_posicao_onibus_atual', ['prefixo_onibus'], ['letreiro_linha', 'codigo_linha', 'latitude', 'longitude', 'timestamp_captura'])
     
     # --- TAREFA 3: CARREGAR KPIs NRT PARA O POSTGRESQL ---
@@ -193,6 +201,7 @@ def process_silver_to_postgres(df_micro_batch, epoch_id):
     log_info("Carregamento de KPIs NRT e Históricos para o PostgreSQL concluído.")
 
     # --- TAREFA 4: ESCREVER KPIs HISTÓRICOS NA CAMADA SILVER (APPEND RÁPIDO) ---
+    # Merge é um problema aqui, pode fazer o worker atrasar as execuções e não atualizar corretamente os dados.
     log_info("Iniciando Tarefa 4: Escrevendo KPIs históricos na camada Silver intermediária.")
     try:
         # Unimos os dois dataframes de KPIs em um só para uma única escrita
@@ -201,6 +210,7 @@ def process_silver_to_postgres(df_micro_batch, epoch_id):
             df_kpis_unidos = df_speed_final
             if df_stopped_final is not None:
                 # Fazemos um full outer join para garantir que não perderemos linhas de um ou de outro
+                # Pode não ter dados de velocidade ou dados de onibus parados, por isso o full_outer
                 df_kpis_unidos = df_speed_final.join(
                     df_stopped_final,
                     ["id_tempo", "id_linha", "updated_at"],
@@ -209,6 +219,7 @@ def process_silver_to_postgres(df_micro_batch, epoch_id):
         elif df_stopped_final is not None: # Caso só tenhamos ônibus parados e nenhuma velocidade
             df_kpis_unidos = df_stopped_final
 
+        # Escrita rápida com append
         if df_kpis_unidos is not None and not df_kpis_unidos.isEmpty():
             df_kpis_unidos.write.format("delta").mode("append").save(silver_kpi_path)
             log_info(f"APPEND de {df_kpis_unidos.count()} registros de KPI em '{silver_kpi_path}' concluído.")

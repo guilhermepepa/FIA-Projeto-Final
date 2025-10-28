@@ -74,7 +74,6 @@ def main():
         # Captura o erro específico de "caminho não encontrado"
         if "Path does not exist" in str(e):
             log_info(f"Caminho {bronze_path} não encontrado no MinIO.")
-            log_info("Isso é esperado se o NiFi estava fora do ar. Encerrando com sucesso.")
             spark.stop()
             sys.exit(0) # Sai com código 0 (sucesso)
         else:
