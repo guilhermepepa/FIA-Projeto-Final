@@ -12,12 +12,13 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 - **Streaming:** Kafka
 - **Orquestração:** Airflow (http://localhost:8081/)
 - **Transformação:** PySpark (Batch e Streaming)
-- **Camada de Entrega de Dados:** PostgreSQL, Metabase (http://localhost:3000) e FastAPI (http://localhost:8002)
+- **Camada de Entrega de Dados:** PostgreSQL, Metabase (http://localhost:3000), FastAPI (http://localhost:8002) e Trino.
   
 
 A solução implementa uma Arquitetura Lakehouse Medalhão que segue o padrão ELT (Extract, Load, Transform), projetada para fornecer tanto insights operacionais com baixa latência (streaming), quanto análises históricas (batch). 
 
-<img width="2147" height="818" alt="image" src="https://github.com/user-attachments/assets/2a8b216c-5414-4bc3-be37-f5bab9007822" />
+<img width="2170" height="827" alt="image" src="https://github.com/user-attachments/assets/9da754fb-9bd5-463b-b094-60b9ad1edd5a" />
+
 
 
 
@@ -128,7 +129,7 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
 
 ## Dashboards
 - Batch
-  <img width="1858" height="743" alt="image" src="https://github.com/user-attachments/assets/fb6e9ebc-7d06-4194-a6d0-6381572583c5" />
+  <img width="1850" height="747" alt="image" src="https://github.com/user-attachments/assets/459f55a5-e8a9-457b-939b-c64d31091a3e" />
   <img width="1551" height="606" alt="image" src="https://github.com/user-attachments/assets/516103ef-f088-4386-8642-88bd84aa51a8" />
 
 - Near real time
