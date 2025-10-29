@@ -129,7 +129,7 @@ A arquitetura é composta por dois pipelines principais que operam em conjunto: 
 
 ## Dashboards
 - Batch
-  <img width="1856" height="747" alt="image" src="https://github.com/user-attachments/assets/42b8f3f3-7dae-4e87-8b0b-d43873730167" />
+  <img width="1850" height="747" alt="image" src="https://github.com/user-attachments/assets/459f55a5-e8a9-457b-939b-c64d31091a3e" />
   <img width="1551" height="606" alt="image" src="https://github.com/user-attachments/assets/516103ef-f088-4386-8642-88bd84aa51a8" />
 
 - Near real time
