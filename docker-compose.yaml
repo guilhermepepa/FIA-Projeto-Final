@@ -32,6 +32,7 @@ services:
       /usr/bin/mc mb local/bronze --ignore-existing;
       /usr/bin/mc mb local/silver --ignore-existing;
       /usr/bin/mc mb local/gold --ignore-existing;
+      /usr/bin/mc mb local/trino --ignore-existing;
       echo 'Buckets criados.';
       echo 'Copiando arquivos GTFS para a camada bronze...';
       /usr/bin/mc cp --recursive /gtfs-data-local/ local/bronze/gtfs/;
@@ -298,6 +299,21 @@ services:
       - TZ="America/Sao_Paulo"
     networks:
       - sptrans-network
+
+  trino-coordinator:
+    image: trinodb/trino:${TRINO_VERSION}
+    container_name: trino-coordinator
+    hostname: trino-coordinator
+    ports:
+      - "8090:8090" # Porta da UI e API do Trino
+    volumes:
+      - ./trino-config:/etc/trino # Arquivos de configuração
+    networks:
+      - sptrans-network
+    depends_on:
+      - minio
+      - postgres
+
 
 networks:
   sptrans-network:

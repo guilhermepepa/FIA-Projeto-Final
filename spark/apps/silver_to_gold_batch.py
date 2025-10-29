@@ -1,6 +1,6 @@
 import sys
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, countDistinct, lit, hour, to_date
+from pyspark.sql import SparkSession, Window
+from pyspark.sql.functions import col, countDistinct, lit, hour, to_date, row_number
 from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType
 from pyspark.sql.utils import AnalysisException
 from delta.tables import *
@@ -103,37 +103,94 @@ def main():
     try:
         df_kpis_silver = spark.read.format("delta").load(silver_kpi_path)
         # Filtra os KPIs pré-calculados pelo streaming para a hora exata deste lote
-        df_kpis_hora = df_kpis_silver.filter(col("id_tempo") == id_tempo)
+        df_kpis_hora_bruto = df_kpis_silver.filter(col("id_tempo") == id_tempo)
 
-        if df_kpis_hora.isEmpty():
+        if df_kpis_hora_bruto.isEmpty():
             log_info("Nenhum dado de KPI encontrado na Camada Silver para o período. Pulando Tarefa 2.")
         else:
-            df_kpis_hora.cache()
-            log_info(f"Processando {df_kpis_hora.count()} registros de KPI da Silver...")
-
-            # Prepara os dataframes de KPI, removendo duplicatas por segurança
-            df_speed_final = df_kpis_hora.filter(col("velocidade_media_kph").isNotNull()).select("id_tempo", "id_linha", "velocidade_media_kph", "updated_at").dropDuplicates(["id_tempo", "id_linha"])
-            df_stopped_final = df_kpis_hora.filter(col("quantidade_onibus_parados").isNotNull()).select("id_tempo", "id_linha", "quantidade_onibus_parados", "updated_at").dropDuplicates(["id_tempo", "id_linha"])
-
-            # MERGE para Velocidade no Lakehouse
-            if not df_speed_final.isEmpty():
-                log_info("Executando MERGE na 'fato_velocidade_linha' (MinIO)...")
-                DeltaTable.createIfNotExists(spark).location(gold_path_velocidade).addColumns(df_speed_final.schema).execute()
-                DeltaTable.forPath(spark, gold_path_velocidade).alias("gold").merge(
-                    df_speed_final.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha"
-                ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
-                log_info("MERGE 'fato_velocidade_linha' no Lakehouse concluído.")
             
-            # MERGE para Parados no Lakehouse
-            if not df_stopped_final.isEmpty():
-                log_info("Executando MERGE na 'fato_onibus_parados_linha' (MinIO)...")
-                DeltaTable.createIfNotExists(spark).location(gold_path_parados).addColumns(df_stopped_final.schema).execute()
-                DeltaTable.forPath(spark, gold_path_parados).alias("gold").merge(
-                    df_stopped_final.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha"
-                ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
-                log_info("MERGE 'fato_onibus_parados_linha' no Lakehouse concluído.")
+            # O streaming pode ter escrito múltiplos registros para o mesmo id_tempo/id_linha.
+            # Garantimos que pegamos APENAS o mais recente (maior 'updated_at').
+            log_info(f"Lidos {df_kpis_hora_bruto.count()} registros brutos de KPI. Selecionando apenas o mais recente...")
+
+            # 1. Definir a "janela": agrupar pela chave (id_tempo, id_linha)
+            window_spec_kpi = Window.partitionBy("id_tempo", "id_linha") \
+                                  .orderBy(col("updated_at").desc())
+
+            # 2. Aplicar o rank
+            df_kpis_ranked = df_kpis_hora_bruto.withColumn("rank", row_number().over(window_spec_kpi))
+
+            # 3. Filtrar apenas o rank=1 (o mais recente)
+            df_kpis_hora_limpo = df_kpis_ranked.filter(col("rank") == 1).cache() # Cache do DF limpo
             
-            df_kpis_hora.unpersist()
+            record_count_limpo = df_kpis_hora_limpo.count()
+            if record_count_limpo == 0:
+                 log_info("Nenhum dado de KPI restante após a deduplicação. Pulando Tarefa 2.")
+            else:
+                log_info(f"Processando {record_count_limpo} registros de KPI (únicos e mais recentes) da Silver...")
+
+                # Prepara os dataframes de KPI, agora lendo do 'df_kpis_hora_limpo'
+                # O .dropDuplicates() não é mais necessário, pois o rank=1 já garante a unicidade
+                df_speed_final = df_kpis_hora_limpo.filter(col("velocidade_media_kph").isNotNull()) \
+                                                   .select("id_tempo", "id_linha", "velocidade_media_kph", "updated_at")
+                
+                df_stopped_final = df_kpis_hora_limpo.filter(col("quantidade_onibus_parados").isNotNull()) \
+                                                     .select("id_tempo", "id_linha", "quantidade_onibus_parados", "updated_at")
+
+               
+                # MERGE para Velocidade no Lakehouse
+                if not df_speed_final.isEmpty():
+                    log_info("Executando MERGE na 'fato_velocidade_linha' (MinIO)...")
+                    DeltaTable.createIfNotExists(spark).location(gold_path_velocidade).addColumns(df_speed_final.schema).execute()
+                    DeltaTable.forPath(spark, gold_path_velocidade).alias("gold").merge(
+                        df_speed_final.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha"
+                    ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+                    log_info("MERGE 'fato_velocidade_linha' no Lakehouse concluído.")
+                
+                # MERGE para Parados no Lakehouse
+                if not df_stopped_final.isEmpty():
+                    log_info("Executando MERGE na 'fato_onibus_parados_linha' (MinIO)...")
+                    DeltaTable.createIfNotExists(spark).location(gold_path_parados).addColumns(df_stopped_final.schema).execute()
+                    DeltaTable.forPath(spark, gold_path_parados).alias("gold").merge(
+                        df_stopped_final.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha"
+                    ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+                    log_info("MERGE 'fato_onibus_parados_linha' no Lakehouse concluído.")
+                
+                #log_info(f"Limpando dados processados (id_tempo = {id_tempo}) da fila Silver '{silver_kpi_path}'...")
+                #try:
+                #    delta_table_kpis_silver = DeltaTable.forPath(spark, silver_kpi_path)
+                #    delta_table_kpis_silver.delete(col("id_tempo") == id_tempo)
+                #    log_info(f"Limpeza do id_tempo = {id_tempo} concluída.")
+                    
+                #except Exception as e:
+                #    log_info(f"AVISO: Falha ao limpar a fila Silver: {e}")
+
+
+                log_info(f"Mantendo na camada Silver apenas os dados limpos para o = {id_tempo}...")
+                try:
+                    # Seleciona apenas os dados limpos (sem a coluna 'rank')
+                    df_audit_log = df_kpis_hora_limpo.select(
+                        "id_tempo", 
+                        "id_linha", 
+                        "velocidade_media_kph", 
+                        "quantidade_onibus_parados", 
+                        "updated_at"
+                    )
+
+                    # Sobrescreve atomicamente APENAS a partição deste id_tempo
+                    df_audit_log.write \
+                        .format("delta") \
+                        .mode("overwrite") \
+                        .option("replaceWhere", f"id_tempo = {id_tempo}") \
+                        .save(silver_kpi_path)
+                    
+                    log_info(f"Partição id_tempo = {id_tempo} na fila Silver foi substituída.")
+                
+                except Exception as e:
+                    log_info(f"AVISO: Falha ao atualizar o log de auditoria na fila Silver: {e}")
+
+                df_kpis_hora_limpo.unpersist() # Unpersist do DF limpo
+
     except Exception as e:
         log_info(f"Erro na Tarefa 2: {e}")
 
