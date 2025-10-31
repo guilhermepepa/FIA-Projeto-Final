@@ -53,6 +53,7 @@ services:
     volumes:
       - nifi_conf:/opt/nifi/nifi-current/conf
       - nifi_data:/opt/nifi/nifi-current/database_repository
+      - ./sptrans_gtfs-files:/opt/nifi/gtfs-data-local
     depends_on:
       - minio
     ports:
