@@ -222,7 +222,11 @@ def process_silver_to_postgres(df_micro_batch, epoch_id):
 
         # Escrita rápida com append
         if df_kpis_unidos is not None and not df_kpis_unidos.isEmpty():
-            df_kpis_unidos.write.format("delta").mode("append").save(silver_kpi_path)
+            df_kpis_unidos.write \
+            .format("delta") \
+            .mode("append") \
+            .partitionBy("id_tempo") \
+            .save(silver_kpi_path)
             log_info(f"APPEND de {df_kpis_unidos.count()} registros de KPI em '{silver_kpi_path}' concluído.")
         else:
             log_info("Nenhum KPI histórico para salvar neste lote.")
