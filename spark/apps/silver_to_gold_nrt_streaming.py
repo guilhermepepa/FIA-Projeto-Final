@@ -105,6 +105,7 @@ def process_silver_to_postgres(df_micro_batch, epoch_id):
     if df_micro_batch.isEmpty():
         log_info("Micro-lote vazio. Pulando."); df_micro_batch.unpersist(); return
 
+
     spark = df_micro_batch.sparkSession
 
     # Destino dos KPIs históricos (intermediário)
@@ -121,7 +122,7 @@ def process_silver_to_postgres(df_micro_batch, epoch_id):
     log_info("Iniciando Tarefa 1: Cálculo dos KPIs operacionais.")
     try:
         # Carrega dimensões (pequenas, rápido)
-        df_dim_linha = spark.read.jdbc(url=db_url, table="dim_linha", properties=db_properties)
+        df_dim_linha = spark.read.jdbc(url=db_url, table="dim_linha", properties=db_properties).dropDuplicates(["letreiro_linha"])
         df_dim_tempo = spark.read.jdbc(url=db_url, table="dim_tempo", properties=db_properties)
         df_last_positions = spark.read.jdbc(url=db_url, table="nrt_posicao_onibus_atual", properties=db_properties)
         
@@ -257,7 +258,8 @@ def main():
     
     df_stream = spark.readStream \
         .format("delta") \
-        .option("maxFilesPerTrigger", 50) \
+        .option("maxFilesPerTrigger", 300) \
+        .option("startingTimestamp", "2025-11-04T00:00:00Z") \
         .load(silver_stream_path)
     
     query = df_stream.writeStream \
