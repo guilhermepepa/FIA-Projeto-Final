@@ -1,0 +1,10 @@
+# 1. Entre no container master
+docker exec -it spark-master /bin/bash
+
+# 2. (Dentro do container) Execute o spark-submit para o novo script:
+/opt/spark/bin/spark-submit \
+    --master spark://spark-master:7077 \
+    --packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0,io.delta:delta-spark_2.12:3.2.0 \
+    --conf "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension" \
+    --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog" \
+    /opt/spark/apps/hotfix/hotfix_kpi_queue.py

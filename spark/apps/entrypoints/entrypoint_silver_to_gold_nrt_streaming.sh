@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e # Sair imediatamente se um comando falhar
 
-echo ">>> [STREAMING_PROCESSOR - SILVER TO GOLD NRT]: Instalando dependências Python..."
-pip install psycopg2-binary
-
 echo ">>> [STREAMING_PROCESSOR - SILVER TO GOLD NRT]: Executando spark-submit..."
 /opt/spark/bin/spark-submit \
   --master spark://spark-master:7077 \

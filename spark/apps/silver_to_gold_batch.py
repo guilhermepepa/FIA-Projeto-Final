@@ -1,13 +1,74 @@
 import sys
-from pyspark.sql import SparkSession, Window
+from pyspark.sql import SparkSession
+from pyspark.sql.window import Window
 from pyspark.sql.functions import col, countDistinct, lit, hour, to_date, row_number
 from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType
 from pyspark.sql.utils import AnalysisException
 from delta.tables import *
+import psycopg2 
+from datetime import datetime
 
 def log_info(message):
     """Função auxiliar para imprimir logs formatados."""
     print(f">>> [SPTRANS_SILVER_TO_GOLD_BATCH_LOG]: {message}")
+
+db_url = "jdbc:postgresql://postgres:5432/sptrans_dw"
+db_properties = {"user": "admin", "password": "projetofinal", "driver": "org.postgresql.Driver"}
+pg_conn_string = "host='postgres' dbname='sptrans_dw' user='admin' password='projetofinal'"
+
+
+def upsert_postgres(df, table_name, conflict_columns, update_columns):
+    """
+    Função otimizada para fazer UPSERT no PostgreSQL.
+    """
+    temp_table = f"staging_{table_name}_batch" # Nome temp diferente do streaming
+
+    if df is None or df.isEmpty():
+        log_info(f"DataFrame para a tabela '{table_name}' está vazio. Pulando UPSERT.")
+        return
+    
+    # Salva os dados do batch numa tabela de staging
+    df.write.mode("overwrite").format("jdbc") \
+      .option("url", db_url) \
+      .option("dbtable", temp_table) \
+      .options(**db_properties) \
+      .save()
+
+    # Constrói a query de MERGE (INSERT ... ON CONFLICT)
+    all_columns = df.columns
+    # Remove as colunas de controle do Spark (se existirem) do update
+    update_cols_clean = [c for c in update_columns if c not in conflict_columns and c in all_columns]
+
+    cols_str = ", ".join([f'"{c}"' for c in all_columns])
+    conflict_str = ", ".join([f'"{c}"' for c in conflict_columns])
+    update_set_str = ", ".join([f'"{c}" = EXCLUDED."{c}"' for c in update_cols_clean])
+    
+    # Se não houver colunas para atualizar (apenas chaves), fazemos 'DO NOTHING'
+    if not update_set_str:
+        update_set_str = "DO NOTHING"
+    else:
+        update_set_str = f"DO UPDATE SET {update_set_str}"
+
+    sql_merge = f"""
+        INSERT INTO {table_name} ({cols_str})
+        SELECT {cols_str} FROM {temp_table}
+        ON CONFLICT ({conflict_str})
+        {update_set_str};
+    """
+    
+    conn = None
+    try:
+        conn = psycopg2.connect(pg_conn_string)
+        cur = conn.cursor()
+        cur.execute(sql_merge)
+        conn.commit()
+        cur.close()
+        log_info(f"UPSERT incremental para a tabela '{table_name}' no PostgreSQL concluído.")
+    except Exception as e:
+        log_info(f"Erro no UPSERT para '{table_name}': {e}")
+        if conn: conn.rollback()
+    finally:
+        if conn: conn.close()
 
 def main():
     if len(sys.argv) != 5:
@@ -35,7 +96,7 @@ def main():
         .config("spark.hadoop.fs.s3a.secret.key", "projetofinal") \
         .config("spark.hadoop.fs.s3a.path.style.access", True) \
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
-        .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262") \
+        .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,org.postgresql:postgresql:42.6.0,io.delta:delta-spark_2.12:3.2.0") \
         .config("spark.sql.sources.partitionOverwriteMode", "dynamic") \
         .getOrCreate()
 
@@ -68,6 +129,11 @@ def main():
     id_tempo = df_id_tempo_atual.select("id_tempo").first()[0]
     log_info(f"ID_TEMPO para este lote: {id_tempo}")
 
+    # --- Variáveis para guardar os DFs que irão para o Postgres ---
+    df_fato_para_upsert = None
+    df_velocidade_para_upsert = None
+    df_parados_para_upsert = None
+
     # --- TAREFA 1: Processar Fato de Operação (Contagem) ---
     log_info("Iniciando Tarefa 1: Processamento da 'fato_operacao_linhas_hora'")
     try:
@@ -83,14 +149,15 @@ def main():
         else:
             log_info(f"Agregando {record_count} registros de posição...")
             df_contagem = df_posicoes_hora.groupBy("letreiro_linha").agg(countDistinct("prefixo_onibus").alias("quantidade_onibus"))
-            df_fato_final = df_contagem.join(df_dim_linha, "letreiro_linha", "inner") \
+            df_fato_para_upsert = df_contagem.join(df_dim_linha, "letreiro_linha", "inner") \
                                      .withColumn("id_tempo", lit(id_tempo)) \
                                      .select("id_tempo", "id_linha", "quantidade_onibus")
-            
+
+
             log_info("Executando MERGE na 'fato_operacao_linhas_hora' (MinIO)...")
-            DeltaTable.createIfNotExists(spark).location(gold_path_operacao).addColumns(df_fato_final.schema).execute()
+            DeltaTable.createIfNotExists(spark).location(gold_path_operacao).addColumns(df_fato_para_upsert.schema).execute()
             DeltaTable.forPath(spark, gold_path_operacao).alias("gold").merge(
-                df_fato_final.alias("updates"),
+                df_fato_para_upsert.alias("updates"),
                 "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha"
             ).whenMatchedUpdate(set = { "quantidade_onibus": col("updates.quantidade_onibus") }).whenNotMatchedInsertAll().execute()
             log_info("MERGE no Lakehouse (MinIO) concluído.")
@@ -131,28 +198,28 @@ def main():
 
                 # Prepara os dataframes de KPI, agora lendo do 'df_kpis_hora_limpo'
                 # O .dropDuplicates() não é mais necessário, pois o rank=1 já garante a unicidade
-                df_speed_final = df_kpis_hora_limpo.filter(col("velocidade_media_kph").isNotNull()) \
+                df_velocidade_para_upsert = df_kpis_hora_limpo.filter(col("velocidade_media_kph").isNotNull()) \
                                                    .select("id_tempo", "id_linha", "velocidade_media_kph", "updated_at")
                 
-                df_stopped_final = df_kpis_hora_limpo.filter(col("quantidade_onibus_parados").isNotNull()) \
+                df_parados_para_upsert = df_kpis_hora_limpo.filter(col("quantidade_onibus_parados").isNotNull()) \
                                                      .select("id_tempo", "id_linha", "quantidade_onibus_parados", "updated_at")
 
                
                 # MERGE para Velocidade no Lakehouse
-                if not df_speed_final.isEmpty():
+                if not df_velocidade_para_upsert.isEmpty():
                     log_info("Executando MERGE na 'fato_velocidade_linha' (MinIO)...")
-                    DeltaTable.createIfNotExists(spark).location(gold_path_velocidade).addColumns(df_speed_final.schema).execute()
+                    DeltaTable.createIfNotExists(spark).location(gold_path_velocidade).addColumns(df_velocidade_para_upsert.schema).execute()
                     DeltaTable.forPath(spark, gold_path_velocidade).alias("gold").merge(
-                        df_speed_final.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha"
+                        df_velocidade_para_upsert.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha"
                     ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
                     log_info("MERGE 'fato_velocidade_linha' no Lakehouse concluído.")
                 
                 # MERGE para Parados no Lakehouse
-                if not df_stopped_final.isEmpty():
+                if not df_parados_para_upsert.isEmpty():
                     log_info("Executando MERGE na 'fato_onibus_parados_linha' (MinIO)...")
-                    DeltaTable.createIfNotExists(spark).location(gold_path_parados).addColumns(df_stopped_final.schema).execute()
+                    DeltaTable.createIfNotExists(spark).location(gold_path_parados).addColumns(df_parados_para_upsert.schema).execute()
                     DeltaTable.forPath(spark, gold_path_parados).alias("gold").merge(
-                        df_stopped_final.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha"
+                        df_parados_para_upsert.alias("updates"), "gold.id_tempo = updates.id_tempo AND gold.id_linha = updates.id_linha"
                     ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
                     log_info("MERGE 'fato_onibus_parados_linha' no Lakehouse concluído.")
                 
@@ -195,26 +262,50 @@ def main():
         log_info(f"Erro na Tarefa 2: {e}")
 
     # --- TAREFA 3: CARREGAR DADOS CONSOLIDADOS PARA O POSTGRESQL ---
-    log_info("Iniciando Tarefa 3: Carregamento de TODAS as tabelas de fatos históricas para o PostgreSQL.")
+    log_info("Iniciando Tarefa 3: Carregamento incremental de dados para o PostgreSQL.")
     try:
         # 1. Carrega fato_operacao_linhas_hora
-        if DeltaTable.isDeltaTable(spark, gold_path_operacao):
-            log_info("Carregando 'fato_operacao_linhas_hora' para o PostgreSQL...")
-            spark.read.format("delta").load(gold_path_operacao).write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "fato_operacao_linhas_hora").option("truncate", "true").options(**db_properties).save()
-            log_info("Carregamento de 'fato_operacao_linhas_hora' concluído.")
+        #if DeltaTable.isDeltaTable(spark, gold_path_operacao):
+        #    log_info("Carregando 'fato_operacao_linhas_hora' para o PostgreSQL...")
+        #    spark.read.format("delta").load(gold_path_operacao).write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "fato_operacao_linhas_hora").option("truncate", "true").options(**db_properties).save()
+        #    log_info("Carregamento de 'fato_operacao_linhas_hora' concluído.")
 
         # 2. Carrega fato_velocidade_linha
-        if DeltaTable.isDeltaTable(spark, gold_path_velocidade):
-            log_info("Carregando 'fato_velocidade_linha' para o PostgreSQL...")
-            spark.read.format("delta").load(gold_path_velocidade).write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "fato_velocidade_linha").option("truncate", "true").options(**db_properties).save()
-            log_info("Carregamento de 'fato_velocidade_linha' concluído.")
+        #if DeltaTable.isDeltaTable(spark, gold_path_velocidade):
+        #    log_info("Carregando 'fato_velocidade_linha' para o PostgreSQL...")
+        #    spark.read.format("delta").load(gold_path_velocidade).write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "fato_velocidade_linha").option("truncate", "true").options(**db_properties).save()
+        #    log_info("Carregamento de 'fato_velocidade_linha' concluído.")
 
         # 3. Carrega fato_onibus_parados_linha
-        if DeltaTable.isDeltaTable(spark, gold_path_parados):
-            log_info("Carregando 'fato_onibus_parados_linha' para o PostgreSQL...")
-            spark.read.format("delta").load(gold_path_parados).write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "fato_onibus_parados_linha").option("truncate", "true").options(**db_properties).save()
-            log_info("Carregamento de 'fato_onibus_parados_linha' concluído.")
-            
+        #if DeltaTable.isDeltaTable(spark, gold_path_parados):
+        #    log_info("Carregando 'fato_onibus_parados_linha' para o PostgreSQL...")
+        #    spark.read.format("delta").load(gold_path_parados).write.mode("overwrite").format("jdbc").option("url", db_url).option("dbtable", "fato_onibus_parados_linha").option("truncate", "true").options(**db_properties).save()
+        #    log_info("Carregamento de 'fato_onibus_parados_linha' concluído.")
+
+        # 1. Carrega fato_operacao_linhas_hora
+        #    Chave de conflito: (id_tempo, id_linha)
+        #    Colunas para atualizar: (quantidade_onibus)
+        upsert_postgres(df_fato_para_upsert, 
+                        'fato_operacao_linhas_hora', 
+                        ['id_tempo', 'id_linha'], 
+                        ['quantidade_onibus'])
+
+        # 2. Carrega fato_velocidade_linha
+        #    Chave de conflito: (id_tempo, id_linha)
+        #    Colunas para atualizar: (velocidade_media_kph, updated_at)
+        upsert_postgres(df_velocidade_para_upsert, 
+                        'fato_velocidade_linha', 
+                        ['id_tempo', 'id_linha'], 
+                        ['velocidade_media_kph', 'updated_at'])
+
+        # 3. Carrega fato_onibus_parados_linha
+        #    Chave de conflito: (id_tempo, id_linha)
+        #    Colunas para atualizar: (quantidade_onibus_parados, updated_at)
+        upsert_postgres(df_parados_para_upsert, 
+                        'fato_onibus_parados_linha', 
+                        ['id_tempo', 'id_linha'], 
+                        ['quantidade_onibus_parados', 'updated_at'])
+
     except Exception as e:
         log_info(f"Erro na Tarefa 3 (Carga no PostgreSQL): {e}")
 

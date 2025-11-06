@@ -19,6 +19,12 @@ CALL delta.system.register_table(
   table_location => 's3a://silver/posicoes_onibus_streaming/'
 );
 
+CALL delta.system.register_table(
+  schema_name => 'silver',
+  table_name => 'kpis_historicos_para_processar',
+  table_location => 's3a://silver/kpis_historicos_para_processar/'
+);
+
 
 -- Camada Gold
 CALL delta.system.register_table(

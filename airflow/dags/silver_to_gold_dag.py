@@ -35,7 +35,7 @@ with DAG(
     # Executa todo o processo
     submit_spark_job_docker  = DockerOperator(
         task_id="submit_silver_to_gold_spark_job",
-        image="apache/spark:3.5.7-java17-python3",
+        image="sptrans-spark-custom:3.5.7",
         command=command,
         network_mode="fia-projeto-final_sptrans-network",
         auto_remove=True,
