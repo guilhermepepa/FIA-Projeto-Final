@@ -270,7 +270,7 @@ def main():
         .foreachBatch(process_silver_to_postgres) \
         .outputMode("update") \
         .option("checkpointLocation", "/tmp/spark_checkpoints/silver_to_gold_nrt") \
-        .trigger(processingTime='2 minutes') \
+        .trigger(processingTime='3 minutes') \
         .start()
         
     query.awaitTermination()
