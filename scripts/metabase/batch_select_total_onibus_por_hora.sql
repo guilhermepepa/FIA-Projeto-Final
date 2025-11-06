@@ -1,20 +1,12 @@
--- 1. CTE para encontrar o ID da ÚLTIMA HORA COMPLETA (ignora a hora atual que está sendo processada pelo streaming)
-WITH latest_complete_time AS (
-  SELECT MAX(id_tempo) AS max_id_tempo
-  FROM fato_operacao_linhas_hora
-),
--- 2. CTE para encontrar os 24 últimos 'id_tempo' JÁ CONSOLIDADOS pelo pipeline de lote
-latest_24_consolidated_times AS (
+-- 1. CTE para encontrar os 12 últimos 'id_tempo' JÁ CONSOLIDADOS pelo pipeline de lote
+WITH latest_12_consolidated_times AS (
   SELECT DISTINCT
     id_tempo
   FROM
     fato_operacao_linhas_hora
-  WHERE
-    -- Despreza a hora mais recente para evitar dados parciais do streaming
-    id_tempo <= (SELECT max_id_tempo FROM latest_complete_time)
   ORDER BY
     id_tempo DESC
-  LIMIT 24
+  LIMIT 12
 )
 -- 3. Agora, selecionamos e formatamos os dados apenas para esses 24 momentos consolidados
 SELECT
@@ -32,7 +24,7 @@ FROM
   JOIN dim_tempo dt ON f.id_tempo = dt.id_tempo
 WHERE
   -- Filtra para pegar apenas os registros cujo id_tempo está na nossa lista dos 24 mais recentes consolidados
-  f.id_tempo IN (SELECT id_tempo FROM latest_24_consolidated_times)
+  f.id_tempo IN (SELECT id_tempo FROM latest_12_consolidated_times)
 GROUP BY
   -- Agrupamos pela data e hora originais para garantir a agregação correta
   dt.data_referencia,
