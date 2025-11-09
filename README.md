@@ -82,7 +82,7 @@ A estrutura é dividida em três camadas principais:
             
       - Tabelas de Fato Históricas (Cópia): Cópias das tabelas do Lakehouse (fato_operacao_linhas_hora, etc.), carregadas ao final de cada pipeline de lote para consultas analíticas rápidas.
 
-       <img width="816" height="880" alt="image" src="https://github.com/user-attachments/assets/b809eab9-d06e-4344-bc87-f7501cd3b8b7" />
+       <img width="816" height="862" alt="image" src="https://github.com/user-attachments/assets/ad264727-2a5c-4fbd-a7cd-e7def0413016" />
 
 
 
