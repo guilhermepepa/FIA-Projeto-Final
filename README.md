@@ -52,7 +52,7 @@ A estrutura é dividida em três camadas principais:
       Conteúdo: Versão da tabela de posições otimizada para o fluxo de tempo real. Contém todos os campos necessários, incluindo dados de geolocalização (latitude/longitude), e é particionada por ano/mes/dia/hora para leituras incrementais.
 
 
-    * Tabela posicoes_onibus_streaming (Streaming)
+    * Tabela kpis_historicos_para_processar (Streaming)
     
       Localização: s3a://silver/kpis_historicos_para_processar
 
