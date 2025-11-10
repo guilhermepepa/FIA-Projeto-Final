@@ -17,7 +17,7 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 
 A solução implementa uma Arquitetura Lakehouse Medalhão que segue o padrão ELT (Extract, Load, Transform), projetada para fornecer tanto insights operacionais com baixa latência (streaming), quanto análises históricas (batch). 
 
-<img width="2170" height="827" alt="image" src="https://github.com/user-attachments/assets/79a691e5-9379-4b87-bcfd-19468623bc8b" />
+<img width="2170" height="874" alt="image" src="https://github.com/user-attachments/assets/24d5c084-8960-45d6-b9b3-940a04403bcd" />
 
 
 
@@ -52,7 +52,7 @@ A estrutura é dividida em três camadas principais:
       Conteúdo: Versão da tabela de posições otimizada para o fluxo de tempo real. Contém todos os campos necessários, incluindo dados de geolocalização (latitude/longitude), e é particionada por ano/mes/dia/hora para leituras incrementais.
 
 
-    * Tabela posicoes_onibus_streaming (Streaming)
+    * Tabela kpis_historicos_para_processar (Streaming)
     
       Localização: s3a://silver/kpis_historicos_para_processar
 
@@ -82,7 +82,7 @@ A estrutura é dividida em três camadas principais:
             
       - Tabelas de Fato Históricas (Cópia): Cópias das tabelas do Lakehouse (fato_operacao_linhas_hora, etc.), carregadas ao final de cada pipeline de lote para consultas analíticas rápidas.
 
-       <img width="816" height="880" alt="image" src="https://github.com/user-attachments/assets/b809eab9-d06e-4344-bc87-f7501cd3b8b7" />
+       <img width="816" height="862" alt="image" src="https://github.com/user-attachments/assets/ad264727-2a5c-4fbd-a7cd-e7def0413016" />
 
 
 
