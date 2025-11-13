@@ -12,7 +12,7 @@ Este projeto implementa um pipeline de dados para coletar e analisar dados da AP
 - **Streaming:** Kafka
 - **Orquestração:** Airflow 
 - **Transformação:** PySpark (Batch e Streaming)
-- **Camada de Entrega de Dados:** PostgreSQL, Metabase, FastAPI e Trino.
+- **Camada de Entrega de Dados:** PostgreSQL, Metabase, FastAPI e Trino
   
 
 A solução implementa uma Arquitetura Lakehouse Medalhão que segue o padrão ELT (Extract, Load, Transform), projetada para fornecer tanto insights operacionais com baixa latência (streaming), quanto análises históricas (batch). 
